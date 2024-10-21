@@ -2,6 +2,8 @@
 
 # globset
 
+[![ci][ci-badge]][ci]
+
 globset is a [Nix][nix] library that enables familiar globbing patterns for
 [filesets][fileset], providing a simple interface for source filtering. The core
 is a port of bmatcuk's excellent [doublestar] Golang library for globs.
@@ -170,6 +172,7 @@ larger changes first to get feedback on the idea.
 
 The source code developed for globset is licensed under MIT License.
 
+[ci]: https://github.com/pdtpartners/globset/actions?query=workflow%3ACI
 [doublestar]: https://github.com/bmatcuk/doublestar
 [fileset]: https://www.tweag.io/blog/2023-11-28-file-sets/
 [nix]: https://zero-to-nix.com/concepts/nix
