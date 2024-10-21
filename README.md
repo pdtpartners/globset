@@ -173,6 +173,7 @@ larger changes first to get feedback on the idea.
 The source code developed for globset is licensed under MIT License.
 
 [ci]: https://github.com/pdtpartners/globset/actions?query=workflow%3ACI
+[ci-badge]: https://github.com/pdtpartners/globset/actions/workflows/ci.yml/badge.svg
 [doublestar]: https://github.com/bmatcuk/doublestar
 [fileset]: https://www.tweag.io/blog/2023-11-28-file-sets/
 [nix]: https://zero-to-nix.com/concepts/nix
