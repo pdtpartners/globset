@@ -8,6 +8,8 @@ globset is a [Nix][nix] library that enables familiar globbing patterns for
 [filesets][fileset], providing a simple interface for source filtering. The core
 is a port of bmatcuk's excellent [doublestar] Golang library for globs.
 
+![globs](images/globset.svg)
+
 [Key features](#key-features) •
 [Getting started](#getting-started) •
 [Patterns](#patterns) •
