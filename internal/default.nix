@@ -36,11 +36,9 @@ in rec {
         if splitIndex == -1 then pattern
         else substring (splitIndex + 1) (stringLength pattern) pattern;
 
-      path = root + "/${pattern}";
-
     in
       if patternStart == -1 then
-        handleNoMeta path pattern firstSegment
+        handleNoMeta root pattern firstSegment
       else if firstSegment && pattern == "**" then
         [ "" ]
       else if splitIndex <= patternStart then
@@ -52,17 +50,19 @@ in rec {
             (globSegments root dir false)
         );
 
-  handleNoMeta = path: pattern: firstSegment:
+  handleNoMeta = root: pattern: firstSegment:
     let
       # If pattern doesn't contain any meta characters, unescape the
       # escaped meta characters.
-      escapedPath = unescapeMeta path;
+      escapedPattern = unescapeMeta pattern;
+
+      escapedPath = root + "/${escapedPattern}";
 
       isDirectory = (pathType escapedPath) == "directory";
 
     in
       if pathExists escapedPath && (!firstSegment || !isDirectory) then
-        [ pattern ]
+        [ escapedPattern ]
       else
         [];
 
