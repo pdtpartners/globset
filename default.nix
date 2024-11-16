@@ -130,11 +130,16 @@ let
               else if isEscape && ((patIdx + 1) >= patLen) then
                 # todo: ErrBadPattern
                 false
+              else if isEscape && elemAt patternChars (patIdx + 1) == nameChar then
+                doMatch (args // {
+                  nameIdx = nameIdx + 1;
+                  patIdx = patIdx + 2;
+                  startOfSegment = isSeparator patChar;
+                })
               else if patChar == nameChar || (isQmark && !(isSeparator nameChar)) then
                 doMatch (args // {
                   nameIdx = nameIdx + 1;
-                  # If escaped, skip an additional rune.
-                  patIdx = patIdx + 1 + (if isEscape then 1 else 0);
+                  patIdx = patIdx + 1;
                   startOfSegment = isSeparator patChar;
                 })
               else

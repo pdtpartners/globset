@@ -75,6 +75,8 @@ in {
       { pattern = "a*b*c*d*e*/f"; path = "axbxcxdxe/xxx/f"; expected = false; }
       { pattern = "a*b*c*d*e*/f"; path = "axbxcxdxexxx/fff"; expected = false; }
       { pattern = "a\\*b"; path = "ab"; expected = false; }
+      { pattern = "a\\*b"; path = "a*b"; expected = true; }
+      { pattern = "\\*"; path = "*"; expected = true; }
 
       # Globstar / doublestar
       { pattern = "**"; path = ""; expected = true; }
@@ -107,6 +109,12 @@ in {
       { pattern = "a?b?c?d?e"; path = "axbxxcxdxe"; expected = false; }
       { pattern = "a?b?c?d?e"; path = "axbxcxd/e"; expected = false; }
       { pattern = "\\?"; path = "a"; expected = false; }
+      { pattern = "\\?"; path = "?"; expected = true; }
+      { pattern = "a\\?b"; path = "a?b"; expected = true; }
+
+      # Escapes
+      { pattern = "\\\\"; path = "\\"; expected = true; }
+      { pattern = "\\"; path = "\\"; expected = false; }
     ];
   };
 }
