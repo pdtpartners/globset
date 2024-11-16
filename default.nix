@@ -1,14 +1,17 @@
 { lib }:
 let
   inherit (builtins)
-    stringLength
-    substring
+    elemAt
+    length
   ;
 
   inherit (lib)
+    concatStrings
     foldl'
     hasPrefix
     removePrefix
+    sublist
+    utf8
   ;
 
   fs = lib.fileset;
@@ -68,7 +71,7 @@ let
       fs.unions
         (map
           (name: root + "/${name}")
-          (internal.globSegments root pattern true)
+          (internal.globSegments root (utf8.chars pattern) true)
         );
 
     # Determines whether a given file name matches a glob pattern.
@@ -92,11 +95,12 @@ let
     #   match "a\\*b" "a*b"   # Returns true
     match = pattern: name:
       let
-        patLen = stringLength pattern;
+        patternChars = utf8.chars pattern;
+        nameChars = utf8.chars name;
 
-        nameLen = stringLength name;
+        patLen = length patternChars;
 
-        charAt = str: i: substring i 1 str;
+        nameLen = length nameChars;
 
         isSeparator = char: char == "/";
 
@@ -105,16 +109,18 @@ let
         }@args:
           if nameIdx >= nameLen then
             internal.isZeroLengthPattern
-              (substring patIdx (patLen - patIdx) pattern)
+              (concatStrings (sublist patIdx (patLen - patIdx) patternChars))
           else if patIdx >= patLen then
             handleBacktrack args
           else
             let
-              nameChar = charAt name nameIdx;
+              nameChar = elemAt nameChars nameIdx;
 
-              patChar = charAt pattern patIdx;
+              patChar = elemAt patternChars patIdx;
 
               isStar = patChar == "*";
+
+              isQmark = patChar == "?";
 
               isEscape = patChar == "\\";
 
@@ -124,11 +130,16 @@ let
               else if isEscape && ((patIdx + 1) >= patLen) then
                 # todo: ErrBadPattern
                 false
-              else if patChar == nameChar then
+              else if isEscape && elemAt patternChars (patIdx + 1) == nameChar then
                 doMatch (args // {
                   nameIdx = nameIdx + 1;
-                  # If escaped, skip an additional rune.
-                  patIdx = patIdx + 1 + (if isEscape then 1 else 0);
+                  patIdx = patIdx + 2;
+                  startOfSegment = isSeparator patChar;
+                })
+              else if patChar == nameChar || (isQmark && !(isSeparator nameChar)) then
+                doMatch (args // {
+                  nameIdx = nameIdx + 1;
+                  patIdx = patIdx + 1;
                   startOfSegment = isSeparator patChar;
                 })
               else
@@ -139,7 +150,7 @@ let
             # Check ahead for a second '*'.
             nextPatIdx = args.patIdx + 1;
 
-            isDoublestar = nextPatIdx < patLen && charAt pattern nextPatIdx == "*";
+            isDoublestar = nextPatIdx < patLen && elemAt patternChars nextPatIdx == "*";
 
             starBacktrack = {
               inherit (args) nameIdx;
@@ -149,7 +160,7 @@ let
             };
 
             # Doublestar must also end with separator, treating as single star.
-            doublestarAfterChar = charAt pattern (nextPatIdx + 1);
+            doublestarAfterChar = elemAt patternChars (nextPatIdx + 1);
 
             doublestarBacktrack = {
               inherit (args) nameIdx;
@@ -184,10 +195,10 @@ let
               nameIdx = args.starBacktrack.nameIdx + 1;
             };
 
-            starNameChar = charAt name args.starBacktrack.nameIdx;
+            starNameChar = elemAt nameChars args.starBacktrack.nameIdx;
 
             nextSeparatorIdx =
-              internal.findNextSeparator name args.doublestarBacktrack.nameIdx;
+              internal.findNextSeparator nameChars args.doublestarBacktrack.nameIdx;
 
             doublestarBacktrack = {
               inherit (args.doublestarBacktrack) patIdx;
