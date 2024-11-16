@@ -120,6 +120,8 @@ let
 
               isStar = patChar == "*";
 
+              isQmark = patChar == "?";
+
               isEscape = patChar == "\\";
 
             in
@@ -128,7 +130,7 @@ let
               else if isEscape && ((patIdx + 1) >= patLen) then
                 # todo: ErrBadPattern
                 false
-              else if patChar == nameChar then
+              else if patChar == nameChar || (isQmark && !(isSeparator nameChar)) then
                 doMatch (args // {
                   nameIdx = nameIdx + 1;
                   # If escaped, skip an additional rune.

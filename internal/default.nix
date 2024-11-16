@@ -129,7 +129,7 @@ in rec {
           char = head chars;
           rest = tail chars;
         in
-          if char == "*" then i
+          if char == "*" || char == "?" then i
           else if char == "\\" then
             if rest == [] then -1
             else find (i + 2) (tail rest)
@@ -165,7 +165,7 @@ in rec {
 
   unescapeMeta = str:
     replaceStrings
-      [ "\\*" ]
-      [ "*" ]
+      [ "\\*" "\\?" ]
+      [ "*" "?" ]
       str;
 }

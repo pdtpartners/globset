@@ -37,11 +37,13 @@ in {
     tests = [
       { str = ""; expected = -1; }
       { str = "*abc"; expected = 0; }
+      { str = "a\\?b"; expected = -1; }
       { str = "\\*a*"; expected = 3; }
       { str = "abc\\*def"; expected = -1; }
       { str = "ab\\*cd*ef"; expected = 6; }
       { str = "no\\*meta"; expected = -1; }
       { str = "\\\\*meta"; expected = 2; }
+      { str = "\\\\?meta"; expected = 2; }
       { str = "escaped\\"; expected = -1; }
       { str = "escaped\\\\"; expected = -1; }
     ];
@@ -92,6 +94,19 @@ in {
       { pattern = "a/**/c"; path = "a/b/c"; expected = true; }
       { pattern = "a/**/d"; path = "a/b/c/d"; expected = true; }
       { pattern = "a/\\**"; path = "a/b/c"; expected = false; }
+
+      # Question mark
+      { pattern = "?"; path = "a"; expected = true; }
+      { pattern = "?"; path = "Æ"; expected = true; }
+      { pattern = "?"; path = "ab"; expected = false; }
+      { pattern = "?"; path = "/"; expected = false; }
+      { pattern = "/?"; path = "/"; expected = false; }
+      { pattern = "a?b?c?d?e"; path = "axbxcxdxe"; expected = true; }
+      { pattern = "a?b?c?d?e"; path = "a一b二c三d四e"; expected = true; }
+      { pattern = "a?b?c?d???e"; path = "a一b二c三d四e"; expected = false; }
+      { pattern = "a?b?c?d?e"; path = "axbxxcxdxe"; expected = false; }
+      { pattern = "a?b?c?d?e"; path = "axbxcxd/e"; expected = false; }
+      { pattern = "\\?"; path = "a"; expected = false; }
     ];
   };
 }
