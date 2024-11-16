@@ -2,8 +2,9 @@
   description = "Simplify Nix source management using familiar glob patterns";
 
   inputs.nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
+  inputs.utf8.url = "github:figsoda/utf8";
 
-  outputs = { self, nixpkgs-lib }:
+  outputs = { self, nixpkgs-lib, utf8 }:
     let 
       inherit (builtins)
         fromJSON
@@ -25,13 +26,13 @@
 
       pkgs = import nixpkgs { inherit system; };
 
-      globset = import self { inherit (nixpkgs-lib) lib; };
+      globset = import self { lib = nixpkgs-lib.lib // { utf8 = utf8.lib; }; };
    
     in {
       lib = globset;
 
       tests.${system} = import ./internal/tests.nix {
-        lib = nixpkgs-lib.lib // { inherit globset; };
+        lib = nixpkgs-lib.lib // { inherit globset; utf8 = utf8.lib; };
       };
 
       checks.${system}.default = pkgs.runCommand "tests" {
@@ -42,6 +43,7 @@
           --eval-store "$HOME" \
           --extra-experimental-features flakes \
           --override-input nixpkgs-lib ${nixpkgs-lib} \
+          --override-input utf8 ${utf8} \
           --flake ${self}#tests
         touch $out
       '';

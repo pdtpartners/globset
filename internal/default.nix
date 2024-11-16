@@ -1,20 +1,22 @@
 { lib }:
 let
   inherit (builtins)
+    elemAt
     filter
     head
+    length
     pathExists
     readDir
     replaceStrings
-    stringLength
-    substring
     tail
   ;
 
   inherit (lib)
     concatLists
+    concatStrings
+    drop
     mapAttrsToList
-    stringToCharacters
+    take
   ;
 
   inherit (lib.filesystem)
@@ -22,32 +24,32 @@ let
   ;
 
 in rec {
-  globSegments = root: pattern: firstSegment:
+  globSegments = root: patternChars: firstSegment:
     let
-      patternStart = firstUnescapedMeta pattern;
+      patternStart = firstUnescapedMeta patternChars;
 
-      splitIndex = lastIndexSlash pattern;
+      splitIndex = lastIndexSlash patternChars;
 
-      dir =
-        if splitIndex == -1 then ""
-        else substring 0 splitIndex pattern;
+      dirChars =
+        if splitIndex == -1 then []
+        else take splitIndex patternChars;
 
-      pattern' =
-        if splitIndex == -1 then pattern
-        else substring (splitIndex + 1) (stringLength pattern) pattern;
+      patternChars' =
+        if splitIndex == -1 then patternChars
+        else drop (splitIndex + 1) patternChars;
 
     in
       if patternStart == -1 then
-        handleNoMeta root pattern firstSegment
-      else if firstSegment && pattern == "**" then
+        handleNoMeta root (concatStrings patternChars) firstSegment
+      else if firstSegment && patternChars == [ "*" "*" ] then
         [ "" ]
       else if splitIndex <= patternStart then
-        globSegment root dir pattern' firstSegment
+        globSegment root (concatStrings dirChars) patternChars' firstSegment
       else
         concatLists (
           map
-            (dir: globSegment root dir pattern' firstSegment)
-            (globSegments root dir false)
+            (dir: globSegment root dir patternChars' firstSegment)
+            (globSegments root dirChars false)
         );
 
   handleNoMeta = root: pattern: firstSegment:
@@ -66,11 +68,11 @@ in rec {
       else
         [];
 
-  globSegment = root: dir: pattern: matchFiles:
-    if pattern == "" then
+  globSegment = root: dir: patternChars: matchFiles:
+    if patternChars == [] then
       if matchFiles then []
       else [ dir ]
-    else if pattern == "**" then
+    else if patternChars == [ "*" "*" ] then
       globDoublestar root dir matchFiles
     else if pathType (root + "/${dir}") != "directory" then
       []
@@ -81,7 +83,7 @@ in rec {
           else file.type == "directory";
 
         onlyMatches = file:
-          matchFileType file && lib.globset.match pattern file.name;
+          matchFileType file && lib.globset.match (concatStrings patternChars) file.name;
 
         files = mapAttrsToList
           (name: type: { inherit name type; })
@@ -119,10 +121,8 @@ in rec {
     || pattern == "**/"
     || pattern == "/**/";
 
-  firstUnescapedMeta = str:
+  firstUnescapedMeta = chars:
     let
-      chars = stringToCharacters str;
-
       find = i: chars:
         if chars == [] then -1
         else let
@@ -137,13 +137,13 @@ in rec {
 
     in find 0 chars;
       
-  lastIndexSlash = str:
+  lastIndexSlash = chars:
     let
-      len = stringLength str;
+      len = length chars;
 
       isUnescapedSlash = i:
-        (substring i 1 str == "/") &&
-        (i == 0 || substring (i - 1) 1 str != "\\");
+        (elemAt chars i == "/") &&
+        (i == 0 || elemAt chars (i - 1) != "\\");
 
       findLastSlash = i:
         if i < 0 then -1
@@ -152,13 +152,13 @@ in rec {
 
     in findLastSlash (len - 1);
 
-  findNextSeparator = str: startIdx:
+  findNextSeparator = chars: startIdx:
     let
-      len = stringLength str;
+      len = length chars;
 
       findSeparator = i:
         if i >= len then -1
-        else if substring i 1 str == "/" then i
+        else if elemAt chars i == "/" then i
         else findSeparator (i + 1);
 
     in findSeparator startIdx;

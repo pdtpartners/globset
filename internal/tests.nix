@@ -33,7 +33,7 @@ let
 in {
   firstUnescapedMeta = mkSuite {
     testNameFn = testCase: ''firstUnescapedMeta "${testCase.str}"'';
-    valueFn = testCase: internal.firstUnescapedMeta testCase.str;
+    valueFn = testCase: internal.firstUnescapedMeta (lib.utf8.chars testCase.str);
     tests = [
       { str = ""; expected = -1; }
       { str = "*abc"; expected = 0; }
