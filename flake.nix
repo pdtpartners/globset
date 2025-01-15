@@ -4,11 +4,8 @@
   inputs.nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
 
   outputs = { self, nixpkgs-lib }:
-    let 
-      inherit (builtins)
-        fromJSON
-        readFile
-      ;
+    let
+      inherit (builtins) fromJSON readFile;
 
       system = "x86_64-linux";
 
@@ -17,7 +14,8 @@
       inputFromLock = name:
         let locked = nodes.${name}.locked;
         in fetchTarball {
-          url = "https://github.com/${locked.owner}/${locked.repo}/archive/${locked.rev}.tar.gz";
+          url =
+            "https://github.com/${locked.owner}/${locked.repo}/archive/${locked.rev}.tar.gz";
           sha256 = locked.narHash;
         };
 
@@ -26,7 +24,7 @@
       pkgs = import nixpkgs { inherit system; };
 
       globset = import self { inherit (nixpkgs-lib) lib; };
-   
+
     in {
       lib = globset;
 
@@ -34,16 +32,22 @@
         lib = nixpkgs-lib.lib // { inherit globset; };
       };
 
-      checks.${system}.default = pkgs.runCommand "tests" {
-        nativeBuildInputs = [ pkgs.nix-unit ];
-      } ''
-        export HOME="$(realpath .)"
-        nix-unit \
-          --eval-store "$HOME" \
-          --extra-experimental-features flakes \
-          --override-input nixpkgs-lib ${nixpkgs-lib} \
-          --flake ${self}#tests
-        touch $out
-      '';
+      checks.${system} = {
+        default =
+          pkgs.runCommand "tests" { nativeBuildInputs = [ pkgs.nix-unit ]; } ''
+            export HOME="$(realpath .)"
+            nix-unit \
+              --eval-store "$HOME" \
+              --extra-experimental-features flakes \
+              --override-input nixpkgs-lib ${nixpkgs-lib} \
+              --flake ${self}#tests
+            touch $out
+          '';
+        integration-tests =
+          pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; } ''
+            nix-build ${./integration-tests.nix} -A runAllTests
+            touch $out
+          '';
+      };
     };
 }
