@@ -92,4 +92,4 @@ let
       echo "All tests passed!" > $out/result
     '';
 
-in { inherit runAllTests testGoProject testCProject; }
+in { inherit runAllTests; }
