@@ -7,7 +7,8 @@ let
 
 in {
   inherit (pattern)
-    handleNoMeta firstUnescapedMeta unescapeMeta isZeroLengthPattern;
+    handleNoMeta firstUnescapedMeta unescapeMeta isZeroLengthPattern
+    parseCharClass inCharRange matchesCharClass;
 
   inherit (path) lastIndexSlash findNextSeparator;
 

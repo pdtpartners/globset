@@ -259,6 +259,73 @@ in {
         path = "a/b/c";
         expected = false;
       }
+
+      # Character class
+      {
+        pattern = "[abc]";
+        path = "b";
+        expected = true;
+      }
+      {
+        pattern = "[abc]";
+        path = "d";
+        expected = false;
+      }
+      {
+        pattern = "[a-z]";
+        path = "m";
+        expected = true;
+      }
+      {
+        pattern = "[a-z]";
+        path = "3";
+        expected = false;
+      }
+      {
+        pattern = "[^abc]";
+        path = "d";
+        expected = true;
+      }
+      {
+        pattern = "[^abc]";
+        path = "b";
+        expected = false;
+      }
+      {
+        pattern = "[!0-9]";
+        path = "a";
+        expected = true;
+      }
+      {
+        pattern = "[!0-9]";
+        path = "5";
+        expected = false;
+      }
+      {
+        pattern = "foo[abc].txt";
+        path = "fooa.txt";
+        expected = true;
+      }
+      {
+        pattern = "[a-z]/**/*.txt";
+        path = "d/foo/bar.txt";
+        expected = true;
+      }
+      {
+        pattern = "*.[ch]";
+        path = "foo.c";
+        expected = true;
+      }
+      {
+        pattern = "*.[ch]";
+        path = "foo.o";
+        expected = false;
+      }
+      {
+        pattern = "[^]";
+        path = "foo.c";
+        expected = true;
+      }
     ];
   };
 
@@ -386,6 +453,164 @@ in {
       {
         input = "foo*";
         expected = false;
+      }
+    ];
+  };
+
+  inCharRange = mkSuite {
+    testNameFn = testCase:
+      ''inCharRange "${testCase.start}" "${testCase.end}" "${testCase.char}"'';
+    valueFn = testCase:
+      internal.inCharRange testCase.start testCase.end testCase.char;
+    tests = [
+      {
+        start = "a";
+        end = "z";
+        char = "m";
+        expected = true;
+      }
+      {
+        start = "0";
+        end = "9";
+        char = "5";
+        expected = true;
+      }
+      {
+        start = "a";
+        end = "f";
+        char = "g";
+        expected = false;
+      }
+      {
+        start = "A";
+        end = "Z";
+        char = "a";
+        expected = false;
+      }
+    ];
+  };
+
+  parseCharClass = mkSuite {
+    testNameFn = testCase:
+      ''parseCharClass "${testCase.input}" ${toString testCase.startIdx}'';
+    valueFn = testCase:
+      internal.parseCharClass testCase.input testCase.startIdx;
+    tests = [
+      {
+        input = "[abc]def";
+        startIdx = 0;
+        expected = {
+          content = "abc";
+          endIdx = 4;
+          isNegated = false;
+        };
+      }
+      {
+        input = "foo[^a-z]bar";
+        startIdx = 3;
+        expected = {
+          content = "^a-z";
+          endIdx = 8;
+          isNegated = true;
+        };
+      }
+    ];
+  };
+
+  matchesCharClass = mkSuite {
+    testNameFn = testCase:
+      ''matchesCharClass "${testCase.class}" "${testCase.char}"'';
+    valueFn = testCase: internal.matchesCharClass testCase.class testCase.char;
+    tests = [
+      {
+        class = "abc";
+        char = "b";
+        expected = true;
+      }
+      {
+        class = "abc";
+        char = "d";
+        expected = false;
+      }
+      {
+        class = "a-z";
+        char = "m";
+        expected = true;
+      }
+      {
+        class = "a-z";
+        char = "A";
+        expected = false;
+      }
+      {
+        class = "0-9";
+        char = "5";
+        expected = true;
+      }
+      {
+        class = "0-9";
+        char = "a";
+        expected = false;
+      }
+      {
+        class = "^abc";
+        char = "d";
+        expected = true;
+      }
+      {
+        class = "^abc";
+        char = "b";
+        expected = false;
+      }
+      {
+        class = "^a-z";
+        char = "5";
+        expected = true;
+      }
+      {
+        class = "^a-z";
+        char = "m";
+        expected = false;
+      }
+      {
+        class = "!aeiou";
+        char = "x";
+        expected = true;
+      }
+      {
+        class = "!aeiou";
+        char = "e";
+        expected = false;
+      }
+      {
+        class = "!0-9";
+        char = "a";
+        expected = true;
+      }
+      {
+        class = "!0-9";
+        char = "5";
+        expected = false;
+      }
+      {
+        class = "";
+        char = "x";
+        expected = false;
+      }
+      {
+        class = "a";
+        char = "a";
+        expected = true;
+      }
+      {
+        class = "abc-";
+        char = "-";
+        expected = true;
+      }
+      {
+        class = "-abc";
+        char = "-";
+        expected = true;
       }
     ];
   };
