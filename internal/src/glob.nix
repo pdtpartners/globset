@@ -2,7 +2,8 @@
 let
   inherit (builtins) filter pathExists readDir substring stringLength;
 
-  inherit (lib) concatLists mapAttrsToList hasPrefix removePrefix foldl';
+  inherit (lib)
+    concatLists concatMap mapAttrsToList hasPrefix removePrefix foldl';
 
   inherit (lib.filesystem) pathType;
 
@@ -68,25 +69,32 @@ in rec {
   */
   globSegments = root: pattern': firstSegment:
     let
-      patternStart = pattern.firstUnescapedMeta pattern';
-      splitIndex = path.lastIndexSlash pattern';
+      expanded = pattern.expandAlternates pattern';
 
-      dir = if splitIndex == -1 then "" else substring 0 splitIndex pattern';
+      globSegments' = root: pattern': firstSegment:
+        let
+          patternStart = pattern.firstUnescapedMeta pattern';
+          splitIndex = path.lastIndexSlash pattern';
 
-      pattern'' = if splitIndex == -1 then
-        pattern'
-      else
-        substring (splitIndex + 1) (stringLength pattern') pattern';
+          dir =
+            if splitIndex == -1 then "" else substring 0 splitIndex pattern';
 
-    in if patternStart == -1 then
-      pattern.handleNoMeta root pattern' firstSegment
-    else if firstSegment && pattern' == "**" then
-      [ "" ]
-    else if splitIndex <= patternStart then
-      globSegment root dir pattern'' firstSegment
-    else
-      concatLists (map (dir: globSegment root dir pattern'' firstSegment)
-        (globSegments root dir false));
+          pattern'' = if splitIndex == -1 then
+            pattern'
+          else
+            substring (splitIndex + 1) (stringLength pattern') pattern';
+
+        in if patternStart == -1 then
+          pattern.handleNoMeta root pattern' firstSegment
+        else if firstSegment && pattern' == "**" then
+          [ "" ]
+        else if splitIndex <= patternStart then
+          globSegment root dir pattern'' firstSegment
+        else
+          concatLists (map (dir: globSegment root dir pattern'' firstSegment)
+            (globSegments root dir false));
+
+    in concatMap (pattern: globSegments' root pattern firstSegment) expanded;
 
   /* Function: globSegment
      	Type: Path -> String -> String -> Bool -> [String]
@@ -97,7 +105,8 @@ in rec {
       if matchFiles then [ ] else [ dir ]
     else if pattern' == "**" then
       globDoublestar root dir matchFiles
-    else if pathType (root + "/${dir}") != "directory" then
+    else if !pathExists (root + "/${dir}") || pathType (root + "/${dir}")
+    != "directory" then
       [ ]
     else
       let

@@ -2,16 +2,144 @@
 let
   inherit (builtins)
     head replaceStrings stringLength substring tail pathExists match elemAt
-    length;
+    length concatMap elem filter;
 
-  inherit (lib) stringToCharacters hasPrefix removePrefix;
+  inherit (lib)
+    stringToCharacters hasPrefix hasInfix removePrefix splitString take drop;
   inherit (lib.strings) charToInt concatStrings;
   inherit (lib.filesystem) pathType;
+  inherit (lib.lists) concatLists;
 
   asciiLowerA = 97;
   asciiLowerZ = 122;
 
 in rec {
+  /* Function: findEscapedChar
+     Type: [String] -> Int -> String -> Bool
+     Checks if a specific character is escaped by a backslash sequence
+  */
+  findEscapedChar = chars: idx: expectedChar:
+    let
+      len = length chars;
+      prevIdx = idx - 1;
+    in if prevIdx < 0 || idx >= len then
+      false
+    else
+      (elemAt chars prevIdx) == "\\" && (elemAt chars idx) == expectedChar;
+
+  /* Function: splitUnescaped
+     Type: String -> [String]
+     Splits string on unescaped commas while preserving escaped ones
+  */
+  splitUnescaped = str:
+    let
+      chars = stringToCharacters str;
+
+      collectPart = chars: current: parts:
+        if chars == [ ] then
+          parts ++ [ current ]
+        else
+          let
+            char = head chars;
+            rest = tail chars;
+          in if char == "\\" && rest != [ ] then
+            collectPart (tail rest) (current + char + (head rest)) parts
+          else if char == "," && !(findEscapedChar chars 0 ",") then
+            collectPart rest "" (parts ++ [ current ])
+          else
+            collectPart rest (current + char) parts;
+    in (collectPart chars "" [ ]);
+
+  /* Function: parseAlternates
+     Type: String -> { prefix: String, alternates: [String], suffix: String }
+     Parses a pattern containing alternates into its components.
+
+     Example:
+     "{foo},{bar}.{c,h}" ->
+     {
+       prefix = "";
+       alternates = ["foo" "bar"];
+       suffix = ".{c,h}";
+     }
+  */
+  parseAlternates = pattern:
+    let
+      chars = stringToCharacters pattern;
+
+      findOpen = chars: idx:
+        if chars == [ ] then
+          -1
+        else if head chars == "{" && !findEscapedChar chars idx "{" then
+          idx
+        else
+          findOpen (tail chars) (idx + 1);
+
+      findClose = chars: idx: depth:
+        if chars == [ ] then
+          -1
+        else if head chars == "}" && depth == 1
+        && !findEscapedChar chars idx "}" then
+          idx
+        else if head chars == "{" && !findEscapedChar chars idx "{" then
+          findClose (tail chars) (idx + 1) (depth + 1)
+        else if head chars == "}" && !findEscapedChar chars idx "}" then
+          findClose (tail chars) (idx + 1) (depth - 1)
+        else
+          findClose (tail chars) (idx + 1) depth;
+
+      openIdx = findOpen chars 0;
+      noAlternates = openIdx == -1;
+      closeIdx = if noAlternates then
+        -1
+      else
+        findClose (drop (openIdx + 1) chars) (openIdx + 1) 1;
+
+      invalidPattern = closeIdx == -1;
+    in if noAlternates || invalidPattern then {
+      prefix = "";
+      alternates = [ pattern ];
+      suffix = "";
+    } else
+      let
+        prefix = substring 0 openIdx pattern;
+        content = substring (openIdx + 1) (closeIdx - openIdx - 1) pattern;
+        alternates = splitUnescaped content;
+        suffix = substring (closeIdx + 1) (stringLength pattern - closeIdx - 1)
+          pattern;
+      in { inherit prefix alternates suffix; };
+
+  /* Function: expandAlternates
+     Type: String -> [String]
+     Expands a pattern with alternates into all possible combinations.
+
+     Example:
+     "{foo},{bar}.{c,h}" ->
+     [
+       "foo.c"
+       "foo.h"
+       "bar.c"
+       "bar.h"
+     ]
+  */
+  expandAlternates = pattern:
+    let
+      noAlts = !hasInfix "{" pattern || pattern == "";
+      components = parseAlternates pattern;
+
+      suffixVariants = if hasInfix "{" components.suffix then
+        expandAlternates components.suffix
+      else
+        [ components.suffix ];
+
+      expandOne = alt:
+        map (suffix: unescapeAlternates "${components.prefix}${alt}${suffix}")
+        suffixVariants;
+
+    in if noAlts then
+      [ pattern ]
+    else
+      concatMap expandOne components.alternates;
+
   /* Function: parseCharClass
      Type: String -> Int -> { content: String, endIdx: Int, isNegated: Bool }
      Parses a character class starting at the given index. Handles
@@ -152,7 +280,21 @@ in rec {
       Unescapes meta characters in a pattern string.
   */
   unescapeMeta = pattern:
-    replaceStrings [ "\\*" "\\[" "\\]" ] [ "*" "[" "]" ] pattern;
+    replaceStrings [ "\\*" "\\[" "\\]" "\\{" "\\}" "\\," ] [
+      "*"
+      "["
+      "]"
+      "{"
+      "}"
+      ","
+    ] pattern;
+
+  /* Function: unescapeAlternates
+      Type: String -> String
+      Unescapes meta characters in a pattern string during alternate expansion. At this stage, we don't want to unescape *, [ and ]
+  */
+  unescapeAlternates = pattern:
+    replaceStrings [ "\\{" "\\}" "\\," ] [ "{" "}" "," ] pattern;
 
   /* Function: isZeroLengthPattern
       Type: String -> Bool

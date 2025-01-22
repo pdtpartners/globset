@@ -418,6 +418,49 @@ in {
     ];
   };
 
+  unescapeAlternates = mkSuite {
+    testNameFn = testCase: ''unescapeAlternates "${testCase.input}"'';
+    valueFn = testCase: internal.unescapeAlternates testCase.input;
+    tests = [
+      {
+        input = "";
+        expected = "";
+      }
+      {
+        input = "\\*";
+        expected = "\\*";
+      }
+      {
+        input = "\\{";
+        expected = "{";
+      }
+      {
+        input = "\\}";
+        expected = "}";
+      }
+      {
+        input = "\\,";
+        expected = ",";
+      }
+      {
+        input = "foo\\*bar";
+        expected = "foo\\*bar";
+      }
+      {
+        input = "foo\\,bar";
+        expected = "foo,bar";
+      }
+      {
+        input = "\\*\\*";
+        expected = "\\*\\*";
+      }
+      {
+        input = "\\,\\}";
+        expected = ",}";
+      }
+    ];
+  };
+
   isZeroLengthPattern = mkSuite {
     testNameFn = testCase: ''isZeroLengthPattern "${testCase.input}"'';
     valueFn = testCase: internal.isZeroLengthPattern testCase.input;

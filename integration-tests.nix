@@ -150,6 +150,88 @@ let
     (normalizeFileset (globset.lib.glob testRoot "**/ma[h-j]n.py"))
     [ "scripts/main.py" ];
 
+  testBasicBrace = runTest "simple brace expansion"
+    (normalizeFileset (globset.lib.glob testRoot "src/*.{c,h}")) [
+      "src/foo*.c"
+      "src/foobar.c"
+      "src/lib.c"
+      "src/lib.h"
+      "src/main.c"
+    ];
+
+  testEmptyBrace = runTest "empty alternatives in brace"
+    (normalizeFileset (globset.lib.glob testRoot "src/{,test/}*.c")) [
+      "src/foo*.c"
+      "src/foobar.c"
+      "src/lib.c"
+      "src/main.c"
+      "src/test/test_main.c"
+    ];
+
+  testMultipleBraces = runTest "multiple brace expressions" (normalizeFileset
+    (globset.lib.glob testRoot "{src,scripts}/{main,utils}.{c,py}")) [
+      "scripts/main.py"
+      "scripts/utils.py"
+      "src/main.c"
+    ];
+
+  testBracesWithEscapedAsterisk = runTest "Braces with escaped asterisk"
+    (normalizeFileset (globset.lib.globs testRoot [ "src/{,foo\\*}.c" ]))
+    [ "src/foo*.c" ];
+
+  testBracesWithEscapedBraces = runTest "Braces with escaped braces"
+    (normalizeFileset (globset.lib.globs testRoot [ "src/foo{\\{,\\}}.o" ])) [
+      "src/foo{.o"
+      "src/foo}.o"
+    ];
+
+  testBracesWithEscapedComma = runTest "Braces with escaped comma"
+    (normalizeFileset (globset.lib.globs testRoot [ "src/foo{,\\,}.o" ]))
+    [ "src/foo,.o" ];
+
+  testBracesWithEscapedBox = runTest "Braces with escaped box"
+    (normalizeFileset (globset.lib.globs testRoot [ "src/foo{\\[,\\]}.o" ])) [
+      "src/foo[.o"
+      "src/foo].o"
+    ];
+
+  testBracesWithAsteriskInside = runTest "Braces with asterisk inside"
+    (normalizeFileset (globset.lib.globs testRoot [ "src/{foo*,bar*}.x" ])) [
+      "src/bar1.x"
+      "src/bar2.x"
+      "src/foo1.x"
+      "src/foo2.x"
+    ];
+
+  testBracesWithBoxInside = runTest "Braces with box inside" (normalizeFileset
+    (globset.lib.globs testRoot [ "src/{foo[12],bar[12]}.x" ])) [
+      "src/bar1.x"
+      "src/bar2.x"
+      "src/foo1.x"
+      "src/foo2.x"
+    ];
+
+  testBracesWithRangeInside = runTest "Braces with range inside"
+    (normalizeFileset
+      (globset.lib.globs testRoot [ "src/{foo[0-3],bar[0-3]}.x" ])) [
+        "src/bar1.x"
+        "src/bar2.x"
+        "src/foo1.x"
+        "src/foo2.x"
+      ];
+
+  testBracesWithEmptyResult = runTest "Braces with empty result"
+    (normalizeFileset (globset.lib.globs testRoot [ "{foo,bar}/*.c" ])) [ ];
+
+  testMultipleEmptyBraces = runTest "multiple empty alternates"
+    (normalizeFileset (globset.lib.glob testRoot "{,src/}{,test/}*.c")) [
+      "src/foo*.c"
+      "src/foobar.c"
+      "src/lib.c"
+      "src/main.c"
+      "src/test/test_main.c"
+    ];
+
   runAllTests =
     pkgs.runCommand "run-all-tests" { nativeBuildInputs = [ pkgs.bash ]; } ''
       ${testGoProject}
@@ -170,6 +252,18 @@ let
       ${testClassWithGlobs}
       ${testNegatedClassMultiple}
       ${testClassWithMixed}
+      ${testBasicBrace}
+      ${testEmptyBrace}
+      ${testMultipleBraces}
+      ${testBracesWithEscapedAsterisk}
+      ${testBracesWithEscapedBraces}
+      ${testBracesWithEscapedComma}
+      ${testBracesWithEscapedBox}
+      ${testBracesWithAsteriskInside}
+      ${testBracesWithBoxInside}
+      ${testBracesWithEmptyResult}
+      ${testBracesWithRangeInside}
+      ${testMultipleEmptyBraces}
       mkdir -p $out
       echo "All tests passed!" > $out/result
     '';
