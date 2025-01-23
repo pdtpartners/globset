@@ -24,7 +24,7 @@ in {
     in findLastSlash (len - 1);
 
   /* Function: findNextSeparator
-      Type: String x Int -> Int
+      Type: String -> Int -> Int
       Finds the next path separator starting from given index.
   */
   findNextSeparator = str: startIdx:
