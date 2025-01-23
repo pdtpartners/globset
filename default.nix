@@ -1,21 +1,12 @@
 { lib }:
 let
-  inherit (builtins)
-    stringLength
-    substring
-  ;
+  inherit (builtins) stringLength substring;
 
-  inherit (lib)
-    foldl'
-    hasPrefix
-    removePrefix
-  ;
+  inherit (lib) foldl' hasPrefix removePrefix;
 
   fs = lib.fileset;
 
-  internal = import ./internal {
-    lib = lib // { inherit globset; };
-  };
+  internal = import ./internal { lib = lib // { inherit globset; }; };
 
   globset = {
     # The file set containing all files that match any of the given glob patterns,
@@ -47,7 +38,7 @@ let
           else
             fs.union acc (globset.glob root pattern);
 
-      in foldl' applyPattern (fs.unions []) patterns;
+      in foldl' applyPattern (fs.unions [ ]) patterns;
 
     # The file set containing all files that match the given glob pattern, starting
     # from the specified root directory.
@@ -65,11 +56,11 @@ let
     # See also:
     #   - [Pattern matching](https://en.wikipedia.org/wiki/Glob_(programming)).
     glob = root: pattern:
-      fs.unions
-        (map
-          (name: root + "/${name}")
-          (internal.globSegments root pattern true)
-        );
+      let segments = internal.globSegments root pattern true;
+      in if segments == [ ] then
+        fs.unions [ ]
+      else
+        fs.unions (map (name: root + "/${name}") segments);
 
     # Determines whether a given file name matches a glob pattern.
     #
@@ -100,12 +91,11 @@ let
 
         isSeparator = char: char == "/";
 
-        doMatch = {
-          nameIdx, patIdx, startOfSegment, starBacktrack, doublestarBacktrack
-        }@args:
+        doMatch = { nameIdx, patIdx, startOfSegment, starBacktrack
+          , doublestarBacktrack }@args:
           if nameIdx >= nameLen then
             internal.isZeroLengthPattern
-              (substring patIdx (patLen - patIdx) pattern)
+            (substring patIdx (patLen - patIdx) pattern)
           else if patIdx >= patLen then
             handleBacktrack args
           else
@@ -118,28 +108,28 @@ let
 
               isEscape = patChar == "\\";
 
-            in
-              if isStar then
-                handleStar args
-              else if isEscape && ((patIdx + 1) >= patLen) then
-                # todo: ErrBadPattern
-                false
-              else if patChar == nameChar then
-                doMatch (args // {
-                  nameIdx = nameIdx + 1;
-                  # If escaped, skip an additional rune.
-                  patIdx = patIdx + 1 + (if isEscape then 1 else 0);
-                  startOfSegment = isSeparator patChar;
-                })
-              else
-                handleBacktrack args;
+            in if isStar then
+              handleStar args
+            else if isEscape && ((patIdx + 1) >= patLen) then
+            # todo: ErrBadPattern
+              false
+            else if patChar == nameChar then
+              doMatch (args // {
+                nameIdx = nameIdx + 1;
+                # If escaped, skip an additional rune.
+                patIdx = patIdx + 1 + (if isEscape then 1 else 0);
+                startOfSegment = isSeparator patChar;
+              })
+            else
+              handleBacktrack args;
 
         handleStar = args:
           let
             # Check ahead for a second '*'.
             nextPatIdx = args.patIdx + 1;
 
-            isDoublestar = nextPatIdx < patLen && charAt pattern nextPatIdx == "*";
+            isDoublestar = nextPatIdx < patLen && charAt pattern nextPatIdx
+              == "*";
 
             starBacktrack = {
               inherit (args) nameIdx;
@@ -158,24 +148,25 @@ let
               patIdx = nextPatIdx + 2;
             };
 
-          in
-            if isDoublestar && args.startOfSegment && nextPatIdx + 1 >= patLen then
-              # Pattern ends in `/**`, return true.
-              true
-            else if isDoublestar && args.startOfSegment && isSeparator doublestarAfterChar then
-              # Handle double star logic.
-              doMatch (args // {
-                inherit doublestarBacktrack;
-                inherit (doublestarBacktrack) patIdx;
-                starBacktrack = null;
-              })
-            else
-              # Handle single star logic.
-              doMatch (args // {
-                inherit starBacktrack;
-                inherit (starBacktrack) patIdx;
-                startOfSegment = false;
-              });
+          in if isDoublestar && args.startOfSegment && nextPatIdx + 1
+          >= patLen then
+          # Pattern ends in `/**`, return true.
+            true
+          else if isDoublestar && args.startOfSegment
+          && isSeparator doublestarAfterChar then
+          # Handle double star logic.
+            doMatch (args // {
+              inherit doublestarBacktrack;
+              inherit (doublestarBacktrack) patIdx;
+              starBacktrack = null;
+            })
+          else
+          # Handle single star logic.
+            doMatch (args // {
+              inherit starBacktrack;
+              inherit (starBacktrack) patIdx;
+              startOfSegment = false;
+            });
 
         handleBacktrack = args:
           let
@@ -194,22 +185,22 @@ let
               nameIdx = nextSeparatorIdx + 1;
             };
 
-          in
-            if args.starBacktrack != null && !isSeparator starNameChar then
-              doMatch (args // {
-                inherit starBacktrack;
-                inherit (starBacktrack) nameIdx;
-                patIdx = args.starBacktrack.patIdx;
-                startOfSegment = false;
-              })
-            else if args.doublestarBacktrack != null && nextSeparatorIdx != -1  then
-              doMatch (args // {
-                inherit doublestarBacktrack;
-                inherit (doublestarBacktrack) nameIdx patIdx;
-                startOfSegment = true;
-              })
-            else
-              false;
+          in if args.starBacktrack != null && !isSeparator starNameChar then
+            doMatch (args // {
+              inherit starBacktrack;
+              inherit (starBacktrack) nameIdx;
+              patIdx = args.starBacktrack.patIdx;
+              startOfSegment = false;
+            })
+          else if args.doublestarBacktrack != null && nextSeparatorIdx
+          != -1 then
+            doMatch (args // {
+              inherit doublestarBacktrack;
+              inherit (doublestarBacktrack) nameIdx patIdx;
+              startOfSegment = true;
+            })
+          else
+            false;
 
       in doMatch {
         nameIdx = 0;
