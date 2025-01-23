@@ -45,7 +45,14 @@
           '';
         integration-tests =
           pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; } ''
-            nix-build ${./integration-tests.nix} -A runAllTests
+            export NIX_STATE_DIR=$TMPDIR/nix
+            export NIX_STORE_DIR=$TMPDIR/store
+            mkdir -p $NIX_STATE_DIR/profiles
+
+            nix-build ${./integration-tests.nix} -A runAllTests \
+              --option sandbox false \
+              --store $NIX_STORE_DIR
+
             touch $out
           '';
       };
