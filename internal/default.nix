@@ -67,12 +67,13 @@ in rec {
         [];
 
   globSegment = root: dir: pattern: matchFiles:
-    if pattern == "" then
+    let path = root + "/${dir}";
+    in if pattern == "" then
       if matchFiles then []
       else [ dir ]
     else if pattern == "**" then
       globDoublestar root dir matchFiles
-    else if pathType (root + "/${dir}") != "directory" then
+    else if !pathExists path || pathType path != "directory" then
       []
     else
       let
@@ -85,14 +86,17 @@ in rec {
 
         files = mapAttrsToList
           (name: type: { inherit name type; })
-          (readDir (root + "/${dir}"));
+          (readDir path);
 
       in map (file: "${dir}/${file.name}") (filter onlyMatches files);
 
   globDoublestar = root: dir: matchFiles:
     let
       doGlob = root: dir: canMatchFiles:
-        let
+        let path = root + "/${dir}";
+        in if !pathExists path || pathType path != "directory" then
+          [ ]
+        else let
           processEntry = name: type:
             if type == "directory" then
               doGlob root "${dir}/${name}" canMatchFiles
@@ -104,7 +108,7 @@ in rec {
           matchesInSubdirs = concatLists (
             mapAttrsToList
               processEntry
-              (builtins.readDir (root + "/${dir}"))
+              (readDir path)
           );
 
         in [ dir ] ++ matchesInSubdirs;

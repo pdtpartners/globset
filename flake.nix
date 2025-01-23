@@ -33,17 +33,27 @@
       tests.${system} = import ./internal/tests.nix {
         lib = nixpkgs-lib.lib // { inherit globset; };
       };
-
-      checks.${system}.default = pkgs.runCommand "tests" {
-        nativeBuildInputs = [ pkgs.nix-unit ];
-      } ''
-        export HOME="$(realpath .)"
-        nix-unit \
-          --eval-store "$HOME" \
-          --extra-experimental-features flakes \
-          --override-input nixpkgs-lib ${nixpkgs-lib} \
-          --flake ${self}#tests
-        touch $out
-      '';
+      checks.${system} = {
+        default =
+          pkgs.runCommand "tests" { nativeBuildInputs = [ pkgs.nix-unit ]; } ''
+            export HOME="$(realpath .)"
+            nix-unit \
+              --eval-store "$HOME" \
+              --extra-experimental-features flakes \
+              --override-input nixpkgs-lib ${nixpkgs-lib} \
+              --flake ${self}#tests
+            touch $out
+          '';
+        integration-tests =
+          pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; } ''
+            export NIX_STATE_DIR=$TMPDIR/nix
+            export NIX_STORE_DIR=$TMPDIR/store
+            mkdir -p $NIX_STATE_DIR/profiles
+            nix-build ${./integration-tests.nix} -A runAllTests \
+              --option sandbox false \
+              --store $NIX_STORE_DIR
+            touch $out
+          '';
+      };
     };
 }

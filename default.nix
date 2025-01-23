@@ -65,11 +65,11 @@ let
     # See also:
     #   - [Pattern matching](https://en.wikipedia.org/wiki/Glob_(programming)).
     glob = root: pattern:
-      fs.unions
-        (map
-          (name: root + "/${name}")
-          (internal.globSegments root pattern true)
-        );
+      let segments = internal.globSegments root pattern true;
+      in if segments == [ ] then
+        fs.unions [ ]
+      else
+        fs.unions (map (name: root + "/${name}") segments);
 
     # Determines whether a given file name matches a glob pattern.
     #
