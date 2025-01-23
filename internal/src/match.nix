@@ -36,7 +36,6 @@ in {
   #   match "**/c" "a/b"    # Returns false
   #   match "a\\*b" "ab"    # Returns false
   #   match "a\\*b" "a*b"   # Returns true
-
   match = pattern: name:
     let
       patLen = stringLength pattern;
