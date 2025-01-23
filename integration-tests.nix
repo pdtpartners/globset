@@ -99,6 +99,25 @@ let
 
     testEmptyGlobs3 = runTest "empty globs list 3" (normalizeFileset
       (globset.globs testRoot [ "**/foo/*.c" "**/test/**/*.x" ])) [ ];
+
+    testGetAllNixFiles = runTest "globs all nix files" (normalizeFileset
+      (globset.globs testRoot [
+        "**/*.nix"
+        "*.nix"
+        "!home-manager/generated.nix"
+        "home-manager/users/teto/default.nix"
+      ])) [
+        "home-manager/users/root/default.nix"
+        "home-manager/users/teto/default.nix"
+        "home-manager/users/teto/programs/neovim.nix"
+        "home-manager/users/teto/programs/waybar.nix"
+        "home-manager/users/teto/programs/zsh.nix"
+        "home-manager/users/teto/services/blueman-applet.nix"
+        "home-manager/users/teto/services/mpd.nix"
+        "home-manager/users/teto/services/swayidle.nix"
+        "home-manager/users/teto/sway.nix"
+        "home-manager/users/teto/swaync.nix"
+      ];
   };
 
   runAllTests =
