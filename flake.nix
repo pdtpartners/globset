@@ -50,6 +50,7 @@
             export NIX_STORE_DIR=$TMPDIR/store
             mkdir -p $NIX_STATE_DIR/profiles
             nix-build ${./integration-tests.nix} -A runAllTests \
+              --arg nixpkgs ${nixpkgs} \
               --option sandbox false \
               --store $NIX_STORE_DIR
             touch $out

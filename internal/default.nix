@@ -1,6 +1,7 @@
 { lib }:
 let
   inherit (builtins)
+    length
     filter
     head
     pathExists
@@ -9,13 +10,17 @@ let
     stringLength
     substring
     tail
+    elemAt
   ;
 
   inherit (lib)
+    hasPrefix
     concatLists
     mapAttrsToList
     stringToCharacters
   ;
+
+  inherit (lib.strings) concatStrings charToInt;
 
   inherit (lib.filesystem)
     pathType
@@ -133,7 +138,7 @@ in rec {
           char = head chars;
           rest = tail chars;
         in
-          if char == "*" then i
+          if char == "*" || char == "[" then i
           else if char == "\\" then
             if rest == [] then -1
             else find (i + 2) (tail rest)
@@ -169,7 +174,93 @@ in rec {
 
   unescapeMeta = str:
     replaceStrings
-      [ "\\*" ]
-      [ "*" ]
+      [ "\\*" "\\[" "\\]" "\\-" ]
+      [ "*" "[" "]" "-" ]
       str;
+
+  /* Function: parseCharClass
+     Type: String -> Int -> { content: String, endIdx: Int, isNegated: Bool }
+     Parses a character class starting at the given index. Handles
+       - Simple classes [abc]
+       - Ranges [a-z]
+       - Negated classes [^abc] or [!abc]
+
+     Examples:
+       parseCharClass "[abc]def" 0 => { content = "abc", endIdx = 4, isNegated = false }
+       parseCharClass "x[^0-9]" 1 => { content = "^0-9", endIdx = 6, isNegated = true }
+  */
+  parseCharClass = str: startIdx:
+    let
+      len = stringLength str;
+
+      findClosingBracket = idx:
+        if idx >= len then
+          -1
+        else
+          let
+            char = substring idx 1 str;
+            nextChar =
+              if (idx + 1) < len then substring (idx + 1) 1 str else "";
+          in if char == "\\" && nextChar == "]" then
+            findClosingBracket (idx + 2)
+          else if char == "]" && idx > startIdx + 1 then
+            idx
+          else
+            findClosingBracket (idx + 1);
+
+      endIdx = findClosingBracket (startIdx + 1);
+      rawContent = substring (startIdx + 1) (endIdx - startIdx - 1) str;
+      firstChar = substring (startIdx + 1) 1 str;
+
+      content =
+        let chars = stringToCharacters rawContent;
+        isNegation = firstChar == "^" || firstChar == "!";
+        skipFirst = if isNegation then tail chars else chars;
+      in concatStrings skipFirst;
+    in {
+      inherit content endIdx;
+      isNegated = firstChar == "^" || firstChar == "!";
+    };
+
+  /* Function: matchesCharClass
+     Type: String -> String -> Bool
+     Checks if a character matches the given character class definition
+
+     Examples:
+      matchesCharClass "abc" "b"    => true   # Direct match
+      matchesCharClass "a-z" "m"    => true   # Range match
+      matchesCharClass "^0-9" "a"   => true   # Negated match
+      matchesCharClass "!aeiou" "x" => true   # Alternative negation
+  */
+  matchesCharClass = class: char:
+    let
+      isNegated = hasPrefix "^" class || hasPrefix "!" class;
+      actualClass = if isNegated then substring 1 (stringLength class - 1) class else class;
+      chars = stringToCharacters actualClass;
+
+      matches =
+        if length chars >= 3 && elemAt chars 1 == "-" then
+          inCharRange (head chars) (elemAt chars 2) char
+        else
+          builtins.elem char chars;
+    in
+      if isNegated then !matches else matches;
+
+  /* Function: inCharRange
+     Type: String -> String -> String -> Bool
+
+     Checks if a character falls within an ASCII range using character codes.
+     Used for implementing range matches like [a-z].
+
+     Examples:
+       inCharRange "a" "z" "m" => true  # m is between a-z
+       inCharRange "0" "9" "5" => true  # 5 is between 0-9
+       inCharRange "a" "f" "x" => false # x is outside a-f
+  */
+  inCharRange = start: end: char:
+    let
+      startCode = charToInt start;
+      endCode = charToInt end;
+      charCode = charToInt char;
+    in charCode >= startCode && charCode <= endCode;
 }
