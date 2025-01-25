@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> { } }:
+{ nixpkgs ? <nixpkgs>, pkgs ? import nixpkgs { } }:
 let
   lib = pkgs.lib;
   globset = import ./. { inherit lib; };
