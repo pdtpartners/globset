@@ -147,6 +147,95 @@ in {
     ];
   };
 
+  findOpenBrace = mkSuite {
+    testNameFn = testCase: ''findOpenBrace "${testCase.str}" "${toString testCase.idx}"'';
+    valueFn = testCase: internal.findOpenBrace testCase.str testCase.idx;
+    tests = [
+      { str = ""; idx = 0; expected = -1; }
+      { str = "{abc"; idx = 0; expected = 0; }
+      { str = "{abc"; idx = 1; expected = -1; }
+      { str = "\\{a{"; idx = 0; expected = 3; }
+      { str = "abc\\{def"; idx = 0; expected = -1; }
+      { str = "ab\\{cd{ef"; idx = 0; expected = 6; }
+      { str = "escaped\\"; idx = 0; expected = -1; }
+      { str = "escaped\\\\"; idx = 0; expected = -1; }
+    ];
+  };
+
+  findCloseBrace = mkSuite {
+    testNameFn = testCase: ''findCloseBrace "${testCase.str}" "${toString testCase.idx}"'';
+    valueFn = testCase: internal.findCloseBrace testCase.str testCase.idx;
+    tests = [
+      { str = ""; idx = 0; expected = -1; }
+      { str = "}abc"; idx = 0; expected = 0; }
+      { str = "}abc"; idx = 1; expected = -1; }
+      { str = "\\}a}"; idx = 0; expected = 3; }
+      { str = "abc\\}def"; idx = 0; expected = -1; }
+      { str = "ab\\}cd}ef"; idx = 0; expected = 6; }
+      { str = "escaped\\"; idx = 0; expected = -1; }
+      { str = "escaped\\\\"; idx = 0; expected = -1; }
+    ];
+  };
+
+  findNextComma = mkSuite {
+    testNameFn = testCase: ''findNextComma "${testCase.str}" "${toString testCase.idx}" "${toString testCase.len}"'';
+    valueFn = testCase: internal.findNextComma testCase.str testCase.idx testCase.len;
+    tests = [
+      { str = ""; idx = 0; len = 0; expected = -1; }
+      { str = ",abc"; idx = 0; len = 4; expected = 0; }
+      { str = "abc,def"; idx = 0; len = 7; expected = 3; }
+      { str = "abc\\,def"; idx = 0; len = 9; expected = -1; }
+      { str = "abc\\,def,ghi"; idx = 0; len = 13; expected = 8; }
+    ];
+  };
+
+  collectParts = mkSuite {
+    testNameFn = testCase: ''collectParts "${testCase.str}"'';
+    valueFn = testCase: internal.collectParts testCase.str;
+    tests = [
+      { str = "a,b,c"; expected = ["a" "b" "c"]; }
+      { str = "a\\,b,c"; expected = ["a\\,b" "c"]; }
+      { str = "a\\[b,c"; expected = ["a\\[b" "c"]; }
+      { str = "a\\]b,c"; expected = ["a\\]b" "c"]; }
+      { str = "a\\-b,c"; expected = ["a\\-b" "c"]; }
+      { str = "a\\*b,c"; expected = ["a\\*b" "c"]; }
+      { str = "a,b,[cd]"; expected = ["a" "b" "[cd]"]; }
+      { str = "a\\,b,c,d\\{"; expected = ["a\\,b" "c" "d\\{"]; }
+      { str = "foo\\,bar,baz"; expected = ["foo\\,bar" "baz"]; }
+      { str = "single"; expected = ["single"]; }
+      { str = "\\,"; expected = ["\\,"]; }
+      { str = ","; expected = ["" ""]; }
+    ];
+  };
+
+  expandAlternates = mkSuite {
+    testNameFn = testCase: ''expandAlternates "${testCase.pattern}"'';
+    valueFn = testCase: internal.expandAlternates testCase.pattern;
+    tests = [
+      { pattern = "{a,b}"; expected = ["a" "b"]; }
+      { pattern = "{a*,b}"; expected = ["a*" "b"]; }
+      { pattern = "{foo.[ch],test_foo.[ch]}"; expected = ["foo.[ch]" "test_foo.[ch]"]; }
+      { pattern = "{[x-z],b}"; expected = ["[x-z]" "b"]; }
+      { pattern = "pre{a\\,b,c}post"; expected = ["prea,bpost" "precpost"]; }
+      { pattern = "foo\\{bar,baz}"; expected = ["foo\\{bar,baz}"]; }
+      { pattern = "{a,b\\,c,d}"; expected = ["a" "b,c" "d"]; }
+      { pattern = "{foo,bar}.{c,h}"; expected = ["foo.c" "foo.h" "bar.c" "bar.h"]; }
+      { pattern = "{,foo}"; expected = ["" "foo"]; }
+      { pattern = "pre{a,b}post{1,2}"; expected = ["preapost1" "preapost2" "prebpost1" "prebpost2"]; }
+    ];
+  };
+
+  parseAlternates = mkSuite {
+    testNameFn = testCase: ''parseAlternates "${testCase.pattern}"'';
+    valueFn = testCase: internal.parseAlternates testCase.pattern;
+    tests = [
+      { pattern = "{a,b}"; expected = { prefix = ""; alternates = ["a" "b"]; suffix = ""; }; }
+      { pattern = "pre{a\\,b,c}post"; expected = { prefix = "pre"; alternates = ["a\\,b" "c"]; suffix = "post"; }; }
+      { pattern = "foo\\{bar,baz}"; expected = { prefix = ""; alternates = ["foo\\{bar,baz}"]; suffix = ""; }; }
+      { pattern = "{a,b\\,c,d}"; expected = { prefix = ""; alternates = ["a" "b\\,c" "d"]; suffix = ""; }; }
+    ];
+  };
+
   match = mkSuite {
     testNameFn = testCase: ''match "${testCase.pattern}" "${testCase.path}"'';
     valueFn = testCase: lib.globset.match testCase.pattern testCase.path;

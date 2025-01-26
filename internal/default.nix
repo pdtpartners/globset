@@ -14,6 +14,7 @@ let
   ;
 
   inherit (lib)
+    hasInfix
     hasPrefix
     concatLists
     mapAttrsToList
@@ -27,7 +28,65 @@ let
   ;
 
 in rec {
+  findOpenBrace = str: idx:
+    let len = stringLength str;
+    in if idx >= len then -1
+    else if substring idx 1 str == "{" && (idx == 0 || (idx > 0 && substring (idx - 1) 1 str != "\\")) then idx
+    else findOpenBrace str (idx + 1);
+
+  findCloseBrace = str: idx:
+    if idx >= stringLength str then -1
+    else if substring idx 1 str == "}" && (idx == 0 || (idx > 0 && substring (idx - 1) 1 str != "\\")) then idx
+    else findCloseBrace str (idx + 1);
+  
+  findNextComma = str: idx: len:
+    if idx >= len then -1
+    else if substring idx 1 str == "," && 
+          (idx == 0 || substring (idx - 1) 1 str != "\\") 
+    then idx
+    else findNextComma str (idx + 1) len;
+
+  collectParts = str:
+    let
+      len = stringLength str;
+      doCollect = start: parts:
+        let
+          nextComma = findNextComma str start len;
+          segment = if start < 0 || len < 0 then ""
+                  else substring start (if nextComma == -1
+                                      then len - start
+                                      else nextComma - start) str;
+        in if nextComma == -1
+          then parts ++ [segment]
+          else doCollect (nextComma + 1) (parts ++ [segment]);
+    in doCollect 0 [];
+
+  parseAlternates = pattern:
+    let
+      openIdx = findOpenBrace pattern 0;
+      closeIdx = if openIdx == -1 then -1 else findCloseBrace pattern (openIdx + 1);
+    in if openIdx == -1 || closeIdx == -1 then { prefix = ""; alternates = [ pattern ]; suffix = ""; } 
+    else {
+      prefix = substring 0 openIdx pattern;
+      suffix = substring (closeIdx + 1) (stringLength pattern - closeIdx - 1) pattern;
+      alternates = collectParts (substring (openIdx + 1) (closeIdx - openIdx - 1) pattern);
+    };
+  
+  expandAlternates = pattern:
+    let
+      parts = parseAlternates pattern;
+      suffixVariants = if hasInfix "{" parts.suffix then expandAlternates parts.suffix else [parts.suffix];
+      result = if parts.alternates == [pattern] then [pattern]
+        else concatLists (map (alt: map (suffix: unescapeMeta ["{" "}" ","] (parts.prefix + alt + suffix)) suffixVariants) parts.alternates);
+    in result;
+
   globSegments = root: pattern: firstSegment:
+    let
+      allAlternates = expandAlternates pattern;
+    in
+      concatLists (map (p: globSegments' root p firstSegment) allAlternates);
+
+  globSegments' = root: pattern: firstSegment:
     let
       patternStart = firstUnescapedMeta pattern;
 
@@ -59,7 +118,7 @@ in rec {
     let
       # If pattern doesn't contain any meta characters, unescape the
       # escaped meta characters.
-      escapedPattern = unescapeMeta pattern;
+      escapedPattern = unescapeMeta [ "*" "[" "]" "-" ] pattern;
 
       escapedPath = root + "/${escapedPattern}";
 
@@ -172,10 +231,10 @@ in rec {
 
     in findSeparator startIdx;
 
-  unescapeMeta = str:
-    replaceStrings
-      [ "\\*" "\\[" "\\]" "\\-" ]
-      [ "*" "[" "]" "-" ]
+  unescapeMeta = chars: str:
+    replaceStrings 
+      (map (c: "\\" + c) chars)
+      chars
       str;
 
   /* Function: parseCharClass

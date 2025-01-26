@@ -199,6 +199,170 @@ let
     testEmptyCharClass = runTest "empty char class"
       (normalizeFileset (globset.glob testRoot "src/[]*.c"))
       [ ];
+    
+    testBasicBrace = runTest "simple brace expansion"
+      (normalizeFileset (globset.glob testRoot "src/*.{c,h,x}")) [
+        "src/bar1.x"
+        "src/bar2.x"
+        "src/foo*.c"
+        "src/foo1.x"
+        "src/foo2.x"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/lib.h"
+        "src/main.c"
+      ];
+
+    testEmptyBrace = runTest "empty alternatives in brace"
+      (normalizeFileset (globset.glob testRoot "src/{,test/}*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/main.c"
+        "src/test/test_main.c"
+      ];
+
+    testMultipleBraces = runTest "multiple brace expressions" (normalizeFileset
+      (globset.glob testRoot "{src,scripts}/{main,utils}.{c,py}")) [
+        "scripts/main.py"
+        "scripts/utils.py"
+        "src/main.c"
+      ];
+
+    testBracesWithEscapedAsterisk = runTest "Braces with escaped asterisk"
+      (normalizeFileset (globset.globs testRoot [ "src/{,foo\\*}.c" ]))
+      [ "src/foo*.c" ];
+
+    testBracesWithEscapedBraces = runTest "Braces with escaped braces"
+      (normalizeFileset (globset.globs testRoot [ "src/foo{\\{,\\}}.o" ])) [
+        "src/foo{.o"
+        "src/foo}.o"
+      ];
+
+    testBracesWithEscapedComma = runTest "Braces with escaped comma"
+      (normalizeFileset (globset.globs testRoot [ "src/foo{,\\,}.o" ]))
+      [ "src/foo,.o" ];
+
+    testBracesWithEscapedBox = runTest "Braces with escaped box"
+      (normalizeFileset (globset.globs testRoot [ "src/foo{\\[,\\]}.o" ])) [
+        "src/foo[.o"
+        "src/foo].o"
+      ];
+
+    testBracesWithAsteriskInside = runTest "Braces with asterisk inside"
+      (normalizeFileset (globset.globs testRoot [ "src/{foo*,bar*}.x" ])) [
+        "src/bar1.x"
+        "src/bar2.x"
+        "src/foo1.x"
+        "src/foo2.x"
+      ];
+
+    testBracesWithBoxInside = runTest "Braces with box inside" (normalizeFileset
+      (globset.globs testRoot [ "src/{foo[12],bar[12]}.x" ])) [
+        "src/bar1.x"
+        "src/bar2.x"
+        "src/foo1.x"
+        "src/foo2.x"
+      ];
+
+    testBracesWithRangeInside = runTest "Braces with range inside"
+      (normalizeFileset
+        (globset.globs testRoot [ "src/{foo[0-3],bar[0-3]}.x" ])) [
+          "src/bar1.x"
+          "src/bar2.x"
+          "src/foo1.x"
+          "src/foo2.x"
+        ];
+
+    testBracesWithEmptyResult = runTest "Braces with empty result"
+      (normalizeFileset (globset.globs testRoot [ "{foo,bar}/*.c" ])) [ ];
+
+    testMultipleEmptyBraces = runTest "multiple empty alternates"
+      (normalizeFileset (globset.glob testRoot "{,src/}{,test/}*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/main.c"
+        "src/test/test_main.c"
+      ];
+
+    testComplexPattern = runTest "complex pattern combining multiple features"
+      (normalizeFileset (globset.glob testRoot "{cmd,home-manager,pkg,scripts,src}/**/*.{[ch],[xo],go,nix}")) [
+        "cmd/app/main.go"
+        "home-manager/generated.nix"
+        "home-manager/users/root/default.nix"
+        "home-manager/users/teto/default.nix"
+        "home-manager/users/teto/programs/neovim.nix"
+        "home-manager/users/teto/programs/waybar.nix"
+        "home-manager/users/teto/programs/zsh.nix"
+        "home-manager/users/teto/services/blueman-applet.nix"
+        "home-manager/users/teto/services/mpd.nix"
+        "home-manager/users/teto/services/swayidle.nix"
+        "home-manager/users/teto/sway.nix"
+        "home-manager/users/teto/swaync.nix"
+        "pkg/lib/utils.go"
+        "src/bar1.x"
+        "src/bar2.x"
+        "src/foo*.c"
+        "src/foo,.o"
+        "src/foo-.o"
+        "src/foo1.x"
+        "src/foo2.x"
+        "src/foo[.o"
+        "src/foo].o"
+        "src/foobar.c"
+        "src/foo{.o"
+        "src/foo}.o"
+        "src/lib.c"
+        "src/lib.h"
+        "src/main.c"
+        "src/test/test_main.c"
+      ];
+
+    testComplexPattern2 = runTest "complex pattern combining multiple features 2"
+      (normalizeFileset (globset.globs testRoot [
+        "{cmd,home-manager,pkg,scripts,src}/**/*.{[ch],[xo],go,nix}"
+        "!src/**"
+      ])) [
+        "cmd/app/main.go"
+        "home-manager/generated.nix"
+        "home-manager/users/root/default.nix"
+        "home-manager/users/teto/default.nix"
+        "home-manager/users/teto/programs/neovim.nix"
+        "home-manager/users/teto/programs/waybar.nix"
+        "home-manager/users/teto/programs/zsh.nix"
+        "home-manager/users/teto/services/blueman-applet.nix"
+        "home-manager/users/teto/services/mpd.nix"
+        "home-manager/users/teto/services/swayidle.nix"
+        "home-manager/users/teto/sway.nix"
+        "home-manager/users/teto/swaync.nix"
+        "pkg/lib/utils.go"
+      ];
+
+    testComplexPattern3 = runTest "complex pattern combining multiple features 3"
+      (normalizeFileset (globset.globs testRoot [
+        "{cmd,home-manager,pkg,scripts,src}/**/*.{[ch],[xo],go,nix}"
+        "!{src,home-manager}/**"
+      ])) [
+        "cmd/app/main.go"
+        "pkg/lib/utils.go"
+      ];
+
+    testComplexPattern4 = runTest "complex pattern combining multiple features 4"
+      (normalizeFileset (globset.globs testRoot [
+        "{cmd,home-manager,pkg,scripts,src}/**/*.{[ch],[xo],go,nix}"
+        "!{src,home-manager,cmd}/**"
+      ])) [
+        "pkg/lib/utils.go"
+      ];
+    
+    testComplexPattern5 = runTest "complex pattern combining multiple features 5"
+      (normalizeFileset (globset.globs testRoot [
+        "**/*.{[c-x],go,nix}"
+        "!{src,home-manager,cmd}/**"
+      ])) [
+        "pkg/lib/utils.go"
+      ];
   };
 
   runAllTests =
