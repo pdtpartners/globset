@@ -127,6 +127,87 @@ let
         "home-manager/users/teto/sway.nix"
         "home-manager/users/teto/swaync.nix"
       ];
+
+    testCharClass = runTest "character class matching"
+      (normalizeFileset (globset.glob testRoot "src/[fl]*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+      ];
+
+    testCharClassWithEscaping = runTest "character class matching w/ escaping"
+      (normalizeFileset (globset.glob testRoot "src/[e-g]oo\\*.c"))
+      [ "src/foo*.c" ];
+
+    testCharClassWithEscaping2 = runTest "character class matching w/ escaping 2"
+      (normalizeFileset (globset.glob testRoot "src/[e-g]oo\\-.[oc]"))
+      [ "src/foo-.o" ];
+
+    testCharClassWithEscapingInsideClass =
+      runTest "character class matching w/ escaping inside class"
+      (normalizeFileset (globset.glob testRoot "src/[e-g]oo[\\[\\-\\]\\*].[oc]")) [
+        "src/foo*.c"
+        "src/foo-.o"
+        "src/foo[.o"
+        "src/foo].o"
+      ];
+
+    testMultipleCharClassWithEscaping =
+      runTest "multiple character class matching w/ escaping"
+      (normalizeFileset (globset.glob testRoot "src/[e-g][^n][n-q]\\*.c"))
+      [ "src/foo*.c" ];
+
+    testCharRange = runTest "character range matching"
+      (normalizeFileset (globset.glob testRoot "**/[a-m]*.py"))
+      [ "scripts/main.py" ];
+
+    testNegatedClass = runTest "negated character class"
+      (normalizeFileset (globset.glob testRoot "src/[^t]*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/main.c"
+      ];
+
+    testNegatedClassMultiple = runTest "negated character class multiple"
+      (normalizeFileset (globset.glob testRoot "src/[^lt]*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/main.c"
+      ];
+
+    testNegatedClassAlt = runTest "negated character class with !"
+      (normalizeFileset (globset.glob testRoot "src/[!t]*.c")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/main.c"
+      ];
+
+    testCompoundClass = runTest "compound character class patterns"
+      (normalizeFileset (globset.glob testRoot "**/*.[ch]")) [
+        "src/foo*.c"
+        "src/foobar.c"
+        "src/lib.c"
+        "src/lib.h"
+        "src/main.c"
+        "src/test/test_main.c"
+      ];
+
+    testClassWithGlobs = runTest "Pass multiple ranges with globs"
+      (normalizeFileset
+        (globset.globs testRoot [ "**/*[m-o].py" "**/*[r-t].py" ])) [
+          "scripts/main.py"
+          "scripts/utils.py"
+        ];
+
+    testClassWithMixed = runTest "mixed character class with range and literals"
+      (normalizeFileset (globset.glob testRoot "**/ma[h-j]n.py"))
+      [ "scripts/main.py" ];
+
+    testEmptyCharClass = runTest "empty char class"
+      (normalizeFileset (globset.glob testRoot "src/[]*.c"))
+      [ ];
   };
 
 in pkgs.runCommand "run-all-tests" {

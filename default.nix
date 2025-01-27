@@ -118,21 +118,55 @@ let
 
               isEscape = patChar == "\\";
 
+              isClass = patChar == "[";
+              nextPatChar = if (patIdx + 1) < patLen then charAt pattern (patIdx + 1) else "";
             in
               if isStar then
                 handleStar args
-              else if isEscape && ((patIdx + 1) >= patLen) then
-                # todo: ErrBadPattern
-                false
+              else if isClass then
+                handleCharClass args
+              else if isEscape then
+                if nextPatChar == "" then
+                  # todo: ErrBadPattern
+                  false
+                else if nextPatChar == nameChar then
+                  doMatch (args // {
+                    nameIdx = nameIdx + 1;
+                    patIdx = patIdx + 2;
+                    startOfSegment = isSeparator nameChar;
+                  })
+                else
+                  handleBacktrack args
               else if patChar == nameChar then
                 doMatch (args // {
                   nameIdx = nameIdx + 1;
-                  # If escaped, skip an additional rune.
-                  patIdx = patIdx + 1 + (if isEscape then 1 else 0);
+                  patIdx = patIdx + 1;
                   startOfSegment = isSeparator patChar;
                 })
               else
                 handleBacktrack args;
+
+        /* Function: handleCharClass
+           Type: args -> { nameIdx: Int, patIdx: Int, startOfSegment: Bool }
+           Handles character class pattern matching ([abc], [a-z], [^abc], [!0-9]).
+           Called when a '[' character is encountered in the pattern.
+
+           Examples:
+             Pattern: "src/[fl]*.c" matches "src/foo.c", "src/lib.c"
+        */
+        handleCharClass = args:
+          let
+            classInfo = internal.parseCharClass pattern args.patIdx;
+            matches = internal.matchesCharClass classInfo.content
+              (charAt name args.nameIdx);
+          in if (if classInfo.isNegated then !matches else matches) then
+            doMatch (args // {
+              nameIdx = args.nameIdx + 1;
+              patIdx = classInfo.endIdx + 1;
+              startOfSegment = false;
+            })
+          else
+            handleBacktrack args;
 
         handleStar = args:
           let
