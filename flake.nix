@@ -26,6 +26,8 @@
       pkgs = import nixpkgs { inherit system; };
 
       globset = import self { inherit (nixpkgs-lib) lib; };
+
+      integration-tests = import ./integration-tests.nix { inherit pkgs; };
    
     in {
       lib = globset;
@@ -34,16 +36,21 @@
         lib = nixpkgs-lib.lib // { inherit globset; };
       };
 
-      checks.${system}.default = pkgs.runCommand "tests" {
-        nativeBuildInputs = [ pkgs.nix-unit ];
-      } ''
-        export HOME="$(realpath .)"
-        nix-unit \
-          --eval-store "$HOME" \
-          --extra-experimental-features flakes \
-          --override-input nixpkgs-lib ${nixpkgs-lib} \
-          --flake ${self}#tests
-        touch $out
-      '';
+      packages.${system} = { inherit integration-tests; };
+
+      checks.${system} = {
+        default =
+          pkgs.runCommand "tests" { nativeBuildInputs = [ pkgs.nix-unit ]; } ''
+            export HOME="$(realpath .)"
+            nix-unit \
+              --eval-store "$HOME" \
+              --extra-experimental-features flakes \
+              --override-input nixpkgs-lib ${nixpkgs-lib} \
+              --flake ${self}#tests
+            touch $out
+          '';
+
+        inherit integration-tests;
+      };
     };
 }
