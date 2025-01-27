@@ -26,6 +26,8 @@
       pkgs = import nixpkgs { inherit system; };
 
       globset = import self { inherit (nixpkgs-lib) lib; };
+
+      integration-tests = import ./integration-tests.nix { inherit pkgs; };
    
     in {
       lib = globset;
@@ -33,6 +35,9 @@
       tests.${system} = import ./internal/tests.nix {
         lib = nixpkgs-lib.lib // { inherit globset; };
       };
+
+      packages.${system} = { inherit integration-tests; };
+
       checks.${system} = {
         default =
           pkgs.runCommand "tests" { nativeBuildInputs = [ pkgs.nix-unit ]; } ''
@@ -44,17 +49,8 @@
               --flake ${self}#tests
             touch $out
           '';
-        integration-tests =
-          pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; NIX_PATH = "nixpkgs=${nixpkgs}"; } ''
-            nix-build ${./integration-tests.nix} -A runAllTests \
-              --arg nixpkgs ${nixpkgs} \
-              --option sandbox false \
-              --option build-users-group "" \
-              --extra-experimental-features flakes \
-              --store $TMPDIR/nix \
-              --no-out-link
-            touch $out
-          '';
+
+        inherit integration-tests;
       };
     };
 }
