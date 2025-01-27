@@ -111,9 +111,13 @@ let
           else
             let
               nameChar = charAt name nameIdx;
+
               patChar = charAt pattern patIdx;
+
               isStar = patChar == "*";
+
               isEscape = patChar == "\\";
+
               isClass = patChar == "[";
               nextPatChar = if (patIdx + 1) < patLen then charAt pattern (patIdx + 1) else "";
             in

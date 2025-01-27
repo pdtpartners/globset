@@ -208,8 +208,6 @@ let
     testEmptyCharClass = runTest "empty char class"
       (normalizeFileset (globset.glob testRoot "src/[]*.c"))
       [ ];
-=======
->>>>>>> origin/main
   };
 
 in pkgs.runCommand "run-all-tests" {
