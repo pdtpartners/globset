@@ -45,14 +45,12 @@
             touch $out
           '';
         integration-tests =
-          pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; } ''
-            export NIX_STATE_DIR=$TMPDIR/nix
-            export NIX_STORE_DIR=$TMPDIR/store
-            mkdir -p $NIX_STATE_DIR/profiles
+          pkgs.runCommand "integration-tests" { buildInputs = [ pkgs.nix ]; NIX_PATH = "nixpkgs=${nixpkgs}"; } ''
             nix-build ${./integration-tests.nix} -A runAllTests \
               --arg nixpkgs ${nixpkgs} \
               --option sandbox false \
-              --store $NIX_STORE_DIR
+              --option build-users-group "" \
+              --no-out-link
             touch $out
           '';
       };
