@@ -50,6 +50,8 @@
               --arg nixpkgs ${nixpkgs} \
               --option sandbox false \
               --option build-users-group "" \
+              --extra-experimental-features flakes \
+              --store $TMPDIR/nix \
               --no-out-link
             touch $out
           '';
