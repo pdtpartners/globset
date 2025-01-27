@@ -1,8 +1,7 @@
-{ nixpkgs ? <nixpkgs>, pkgs ? import nixpkgs { } }:
+{ pkgs }:
 let
   lib = pkgs.lib;
   globset = import ./. { inherit lib; };
-  fs = lib.fileset;
   testRoot = ./test-data;
 
   normalizeFileset = fileset:
@@ -11,21 +10,31 @@ let
       (lib.fileset.toList fileset));
 
   runTest = name: result: expected:
-    pkgs.writeScript "test-${name}" ''
-      #!/usr/bin/env bash
-      echo "Testing ${name}..."
-      expected='${builtins.toJSON expected}'
-      result='${builtins.toJSON result}'
-      if [ "$result" = "$expected" ]; then
-        echo "PASS: ${name}"
-        exit 0
-      else
-        echo "FAIL: ${name}"
-        echo "Expected: $expected"
-        echo "Got: $result"
-        exit 1
-      fi
-    '';
+    pkgs.stdenv.mkDerivation {
+      name = "test-${name}";
+      src = null;
+      dontUnpack = true;
+      doCheck = true;
+      checkPhase = ''
+        #!/usr/bin/env bash
+        echo "Testing ${name}..."
+        expected='${builtins.toJSON expected}'
+        result='${builtins.toJSON result}'
+        if [ "$result" = "$expected" ]; then
+          echo "PASS: ${name}"
+          exit 0
+        else
+          echo "FAIL: ${name}"
+          echo "Expected: $expected"
+          echo "Got: $result"
+          exit 1
+        fi
+      '';
+
+      buildPhase = ''
+        touch $out
+      '';
+    };
 
   testCases = {
     testGoProject = runTest "globs all Go files"
@@ -372,4 +381,10 @@ let
       echo "All tests passed!" > $out/result
     '';
 
-in { inherit runAllTests; }
+in pkgs.runCommand "run-all-tests" {
+  nativeBuildInputs = [ pkgs.bash ];
+  buildInputs = builtins.attrValues testCases;
+} ''
+  mkdir -p $out
+  echo "All tests passed!" > $out/result
+''
