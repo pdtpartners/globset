@@ -10,7 +10,9 @@
         readFile
       ;
 
-      system = "x86_64-linux";
+      systems = [ "x86_64-linux" "aarch64-darwin" ];
+
+      forAllSystems = nixpkgs-lib.lib.genAttrs systems;
 
       nodes = (fromJSON (readFile ./dev/flake.lock)).nodes;
 
@@ -23,24 +25,24 @@
 
       nixpkgs = inputFromLock "nixpkgs";
 
-      pkgs = import nixpkgs { inherit system; };
+      pkgsFor = system: import nixpkgs { inherit system; };
 
       globset = import self { inherit (nixpkgs-lib) lib; };
-
-      integration-tests = import ./integration-tests.nix { inherit pkgs; };
-   
     in {
       lib = globset;
 
-      tests.${system} = import ./internal/tests.nix {
+      tests = forAllSystems (system: import ./internal/tests.nix {
         lib = nixpkgs-lib.lib // { inherit globset; };
-      };
+      });
 
-      packages.${system} = { inherit integration-tests; };
+      packages = forAllSystems (system: {
+        default = (import ./integration-tests.nix { pkgs = pkgsFor system; });
+        integration-tests = (import ./integration-tests.nix { pkgs = pkgsFor system; });
+      });
 
-      checks.${system} = {
+      checks = forAllSystems (system: {
         default =
-          pkgs.runCommand "tests" { nativeBuildInputs = [ pkgs.nix-unit ]; } ''
+          (pkgsFor system).runCommand "tests" { nativeBuildInputs = [ (pkgsFor system).nix-unit ]; } ''
             export HOME="$(realpath .)"
             nix-unit \
               --eval-store "$HOME" \
@@ -50,7 +52,7 @@
             touch $out
           '';
 
-        inherit integration-tests;
-      };
+        integration-tests = (import ./integration-tests.nix { pkgs = pkgsFor system; });
+      });
     };
-}
+  }
