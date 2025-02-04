@@ -85,18 +85,24 @@ let
     #
     # Examples:
     #   match "a*/b" "abc/b"  # Returns true
+    #   match "a*/∫" "abc/∫"  # Returns true
     #   match "a*/b" "a/c/b"  # Returns false
+    #   match "a*/∫" "a/c/∫"  # Returns false
     #   match "**/c" "a/b/c"  # Returns true
     #   match "**/c" "a/b"    # Returns false
     #   match "a\\*b" "ab"    # Returns false
     #   match "a\\*b" "a*b"   # Returns true
+    #   match "å\\*b" "åb"    # Returns false
+    #   match "å\\*b" "å*b"   # Returns true
     match = pattern: name:
       let
         patLen = stringLength pattern;
 
         nameLen = stringLength name;
 
-        charAt = str: i: substring i 1 str;
+        charAt = str: i: internal.decodeUtf8 str i;
+
+        nextCharLen = str: i: stringLength (charAt str i);
 
         isSeparator = char: char == "/";
 
@@ -116,6 +122,8 @@ let
               isEscape = patChar == "\\";
               isClass = patChar == "[";
               nextPatChar = if (patIdx + 1) < patLen then charAt pattern (patIdx + 1) else "";
+              nameCharLen = nextCharLen name nameIdx;
+              patCharLen = nextCharLen pattern patIdx;
             in
               if isStar then
                 handleStar args
@@ -127,16 +135,16 @@ let
                   false
                 else if nextPatChar == nameChar then
                   doMatch (args // {
-                    nameIdx = nameIdx + 1;
-                    patIdx = patIdx + 2;
+                    nameIdx = nameIdx + nameCharLen;
+                    patIdx = patIdx + patCharLen + (nextCharLen pattern (patIdx + 1));
                     startOfSegment = isSeparator nameChar;
                   })
                 else
                   handleBacktrack args
               else if patChar == nameChar then
                 doMatch (args // {
-                  nameIdx = nameIdx + 1;
-                  patIdx = patIdx + 1;
+                  nameIdx = nameIdx + nameCharLen;
+                  patIdx = patIdx + patCharLen;
                   startOfSegment = isSeparator patChar;
                 })
               else
@@ -153,11 +161,12 @@ let
         handleCharClass = args:
           let
             classInfo = internal.parseCharClass pattern args.patIdx;
-            matches = internal.matchesCharClass classInfo.content
-              (charAt name args.nameIdx);
+            nameChar = charAt name args.nameIdx;
+            nameCharLen = nextCharLen name args.nameIdx;
+            matches = internal.matchesCharClass classInfo.content nameChar;
           in if (if classInfo.isNegated then !matches else matches) then
             doMatch (args // {
-              nameIdx = args.nameIdx + 1;
+              nameIdx = args.nameIdx + nameCharLen;
               patIdx = classInfo.endIdx + 1;
               startOfSegment = false;
             })
@@ -167,7 +176,7 @@ let
         handleStar = args:
           let
             # Check ahead for a second '*'.
-            nextPatIdx = args.patIdx + 1;
+            nextPatIdx = args.patIdx + nextCharLen pattern args.patIdx;
 
             isDoublestar = nextPatIdx < patLen && charAt pattern nextPatIdx == "*";
 
@@ -175,17 +184,15 @@ let
               inherit (args) nameIdx;
               # Doublestar must begin with separator, otherwise we're going to
               # treat it like a single star like bash.
-              patIdx = nextPatIdx + (if isDoublestar then 1 else 0);
+              patIdx = nextPatIdx + (if isDoublestar then nextCharLen pattern nextPatIdx else 0);
             };
 
             # Doublestar must also end with separator, treating as single star.
-            doublestarAfterChar = charAt pattern (nextPatIdx + 1);
+            doublestarAfterChar = charAt pattern (nextPatIdx + (if isDoublestar then nextCharLen pattern nextPatIdx else 0));
 
             doublestarBacktrack = {
               inherit (args) nameIdx;
-              # Add two to be after the separator.
-              # e.g. '**/?' where nextPatIdx is index of '?'.
-              patIdx = nextPatIdx + 2;
+              patIdx = nextPatIdx + (2 * nextCharLen pattern nextPatIdx);
             };
 
           in
@@ -211,13 +218,13 @@ let
           let
             starBacktrack = {
               inherit (args.starBacktrack) patIdx;
-              nameIdx = args.starBacktrack.nameIdx + 1;
+              nameIdx = args.starBacktrack.nameIdx + nextCharLen name args.starBacktrack.nameIdx;
             };
 
             starNameChar = charAt name args.starBacktrack.nameIdx;
 
             nextSeparatorIdx =
-              internal.findNextSeparator name args.doublestarBacktrack.nameIdx;
+              internal.findUnescapedChar name args.doublestarBacktrack.nameIdx [ "/" ];
 
             doublestarBacktrack = {
               inherit (args.doublestarBacktrack) patIdx;
