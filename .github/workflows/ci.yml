@@ -11,5 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.18.2/install
       - run: nix flake check -L

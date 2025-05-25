@@ -10,10 +10,13 @@ let
     stringLength
     substring
     tail
+    elem
     elemAt
   ;
 
   inherit (lib)
+    utf8
+    hasInfix
     hasPrefix
     concatLists
     mapAttrsToList
@@ -27,9 +30,146 @@ let
   ;
 
 in rec {
+  doValidatePattern = s: 
+    let
+      result = validateLoop s 0 0;
+    in 
+      result.valid && result.altDepth == 0;
+
+  validateLoop = s: pos: altDepth:
+    let
+      sLen = stringLength s;
+    in
+      if pos >= sLen then
+        { valid = altDepth == 0; altDepth = altDepth; }
+      else
+        let
+          currentChar = decodeUtf8 s pos;
+          nextPos = pos + 1;
+        in
+          if currentChar == "\\" then
+            if nextPos >= sLen then
+              { valid = false; altDepth = altDepth; }
+            else
+              let
+                afterEscape = pos + 2;
+              in
+                if afterEscape > sLen then
+                  { valid = false; altDepth = altDepth; }
+                else
+                  validateLoop s afterEscape altDepth
+          
+          else if currentChar == "[" then
+            let
+              classResult = validateCharClassAndGetPositionToResume s pos;
+            in
+              if classResult.valid then
+                validateLoop s classResult.endPos altDepth
+              else
+                { valid = false; altDepth = altDepth; }
+          
+          else if currentChar == "{" then
+            validateLoop s nextPos (altDepth + 1)
+          
+          else if currentChar == "}" then
+            if altDepth == 0 then
+              { valid = false; altDepth = altDepth; }
+            else
+              validateLoop s nextPos (altDepth - 1)
+          
+          else
+            validateLoop s nextPos altDepth;
+
+  validateCharClassAndGetPositionToResume = s: startPos:
+    let
+      sLen = stringLength s;
+      afterBracket = startPos + 1;
+      tooShort = afterBracket >= sLen;
+    in
+      if tooShort then { valid = false; endPos = startPos; }
+      else
+        let
+          firstChar = decodeUtf8 s afterBracket;
+          isNegated = firstChar == "^" || firstChar == "!";
+          contentStart = if isNegated then afterBracket + stringLength firstChar else afterBracket;
+
+          noContent = contentStart >= sLen;
+          isEmpty = !noContent && decodeUtf8 s contentStart == "]";
+        in
+          if noContent then { valid = false; endPos = startPos; }
+          else if isEmpty then { valid = false; endPos = startPos; }
+          else
+            let
+              closingBracketPos = findUnescapedChar s contentStart [ "]" ];
+            in
+              if closingBracketPos == -1 
+              then { valid = false; endPos = -1; }
+              else { valid = true; endPos = closingBracketPos + 1; };
+
+  decodeUtf8 = str: offset:
+    let
+      remaining = substring offset (stringLength str - offset) str;
+    in
+      head (utf8.chars remaining);
+
+  findUnescapedChar = str: idx: chars:
+    let
+      find = i:
+        if i >= stringLength str then -1
+        else
+          let
+            curChar = decodeUtf8 str i;
+            prevPrevChar = if i > 1 then decodeUtf8 str (i - 2) else "";
+            prevChar = if i > 0 then decodeUtf8 str (i - 1) else "";
+            isEscaped = prevChar == "\\" && prevPrevChar != "\\";
+          in
+            if elem curChar chars && !isEscaped then i
+            else find (i + 1);
+    in find idx;
+
+  collectParts = str:
+    let
+      len = stringLength str;
+      doCollect = start: parts:
+        let
+          nextComma = findUnescapedChar str start [ "," ];
+          segment = if start < 0 || len < 0 then ""
+                  else substring start (if nextComma == -1
+                                      then len - start
+                                      else nextComma - start) str;
+        in if nextComma == -1
+          then parts ++ [segment]
+          else doCollect (nextComma + 1) (parts ++ [segment]);
+    in doCollect 0 [];
+
+  parseAlternates = pattern:
+    let
+      openIdx = findUnescapedChar pattern 0 [ "{" ];
+      closeIdx = if openIdx == -1 then -1 else findUnescapedChar pattern (openIdx + 1) [ "}" ];
+    in if openIdx == -1 || closeIdx == -1 then { prefix = ""; alternates = [ pattern ]; suffix = ""; } 
+    else {
+      prefix = substring 0 openIdx pattern;
+      suffix = substring (closeIdx + 1) (stringLength pattern - closeIdx - 1) pattern;
+      alternates = collectParts (substring (openIdx + 1) (closeIdx - openIdx - 1) pattern);
+    };
+  
+  expandAlternates = pattern:
+    let
+      parts = parseAlternates pattern;
+      suffixVariants = if hasInfix "{" parts.suffix then expandAlternates parts.suffix else [parts.suffix];
+      result = if parts.alternates == [pattern] then [pattern]
+        else concatLists (map (alt: map (suffix: unescapeMeta ["{" "}" ","] (parts.prefix + alt + suffix)) suffixVariants) parts.alternates);
+    in result;
+
   globSegments = root: pattern: firstSegment:
     let
-      patternStart = firstUnescapedMeta pattern;
+      allAlternates = expandAlternates pattern;
+    in
+      concatLists (map (p: globSegments' root p firstSegment) allAlternates);
+
+  globSegments' = root: pattern: firstSegment:
+    let
+      patternStart = findUnescapedChar pattern 0 [ "*" "[" ];
 
       splitIndex = lastIndexSlash pattern;
 
@@ -59,7 +199,7 @@ in rec {
     let
       # If pattern doesn't contain any meta characters, unescape the
       # escaped meta characters.
-      escapedPattern = unescapeMeta pattern;
+      escapedPattern = unescapeMeta [ "*" "[" "]" "-" ] pattern;
 
       escapedPath = root + "/${escapedPattern}";
 
@@ -127,32 +267,14 @@ in rec {
     || pattern == "/**"
     || pattern == "**/"
     || pattern == "/**/";
-
-  firstUnescapedMeta = str:
-    let
-      chars = stringToCharacters str;
-
-      find = i: chars:
-        if chars == [] then -1
-        else let
-          char = head chars;
-          rest = tail chars;
-        in
-          if char == "*" || char == "[" then i
-          else if char == "\\" then
-            if rest == [] then -1
-            else find (i + 2) (tail rest)
-          else find (i + 1) rest;
-
-    in find 0 chars;
       
   lastIndexSlash = str:
     let
       len = stringLength str;
 
       isUnescapedSlash = i:
-        (substring i 1 str == "/") &&
-        (i == 0 || substring (i - 1) 1 str != "\\");
+        (decodeUtf8 str i == "/") &&
+        (i == 0 || decodeUtf8 str (i - 1) != "\\");
 
       findLastSlash = i:
         if i < 0 then -1
@@ -161,21 +283,10 @@ in rec {
 
     in findLastSlash (len - 1);
 
-  findNextSeparator = str: startIdx:
-    let
-      len = stringLength str;
-
-      findSeparator = i:
-        if i >= len then -1
-        else if substring i 1 str == "/" then i
-        else findSeparator (i + 1);
-
-    in findSeparator startIdx;
-
-  unescapeMeta = str:
-    replaceStrings
-      [ "\\*" "\\[" "\\]" "\\-" ]
-      [ "*" "[" "]" "-" ]
+  unescapeMeta = chars: str:
+    replaceStrings 
+      (map (c: "\\" + c) chars)
+      chars
       str;
 
   /* Function: parseCharClass
@@ -192,28 +303,12 @@ in rec {
   parseCharClass = str: startIdx:
     let
       len = stringLength str;
-
-      findClosingBracket = idx:
-        if idx >= len then
-          -1
-        else
-          let
-            char = substring idx 1 str;
-            nextChar =
-              if (idx + 1) < len then substring (idx + 1) 1 str else "";
-          in if char == "\\" && nextChar == "]" then
-            findClosingBracket (idx + 2)
-          else if char == "]" && idx > startIdx + 1 then
-            idx
-          else
-            findClosingBracket (idx + 1);
-
-      endIdx = findClosingBracket (startIdx + 1);
+      endIdx = findUnescapedChar str (startIdx + 1) [ "]" ];
       rawContent = substring (startIdx + 1) (endIdx - startIdx - 1) str;
-      firstChar = substring (startIdx + 1) 1 str;
+      firstChar = decodeUtf8 str (startIdx + 1);
 
       content =
-        let chars = stringToCharacters rawContent;
+        let chars = utf8.chars rawContent;
         isNegation = firstChar == "^" || firstChar == "!";
         skipFirst = if isNegation then tail chars else chars;
       in concatStrings skipFirst;
@@ -228,6 +323,7 @@ in rec {
 
      Examples:
       matchesCharClass "abc" "b"    => true   # Direct match
+      matchesCharClass "abç" "ç"    => true   # Direct utf-8 match
       matchesCharClass "a-z" "m"    => true   # Range match
       matchesCharClass "^0-9" "a"   => true   # Negated match
       matchesCharClass "!aeiou" "x" => true   # Alternative negation
@@ -236,7 +332,7 @@ in rec {
     let
       isNegated = hasPrefix "^" class || hasPrefix "!" class;
       actualClass = if isNegated then substring 1 (stringLength class - 1) class else class;
-      chars = stringToCharacters actualClass;
+      chars = utf8.chars actualClass;
 
       matches =
         if length chars >= 3 && elemAt chars 1 == "-" then
@@ -259,8 +355,10 @@ in rec {
   */
   inCharRange = start: end: char:
     let
-      startCode = charToInt start;
-      endCode = charToInt end;
-      charCode = charToInt char;
-    in charCode >= startCode && charCode <= endCode;
+      compareChars = a: b:
+        let
+          seqA = utf8.chars a;
+          seqB = utf8.chars b;
+        in builtins.lessThan seqA seqB || seqA == seqB;
+    in compareChars start char && compareChars char end;
 }
