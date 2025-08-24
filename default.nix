@@ -18,6 +18,26 @@ let
   };
 
   globset = {
+    # Add local globbed files rooted at `root`.
+    #
+    # The result is the store path as a string-like value, making it usable
+    # e.g. as the `src` of a derivation.
+    #
+    # Type:
+    #   toSource :: Path -> [ String ] -> SourceLike
+    #
+    # Examples:
+    #   # Collect files matching patterns in the `src` directory
+    #   toSource ./src [
+    #     "**/*.c"          # Include all C source files
+    #     "**/*.h"          # Include all header files
+    #     "!**/test_*"      # Exclude test files
+    #   ]
+    toSource = root: patterns: fs.toSource {
+      inherit root;  
+      fileset = globset.globs root patterns;
+    };
+
     # The file set containing all files that match any of the given glob patterns,
     # starting from the specified root directory.
     #
