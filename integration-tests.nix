@@ -1,39 +1,44 @@
-{ pkgs }:
+{ pkgs, utf8 ? pkgs.lib.utf8 }:
 let
-  lib = pkgs.lib;
+  lib = pkgs.lib // { inherit utf8; };
   globset = import ./. { inherit lib; };
   testRoot = ./test-data;
 
+  sanitizePath = p: builtins.unsafeDiscardStringContext (toString p);
+
   normalizeFileset = fileset:
     builtins.sort builtins.lessThan
-    (map (p: lib.removePrefix "${toString testRoot}/" (toString p))
+    (map (p: lib.removePrefix "${toString testRoot}/" (sanitizePath p))
       (lib.fileset.toList fileset));
 
   runTest = name: result: expected:
     pkgs.stdenv.mkDerivation {
-      name = "test-${name}";
-      src = null;
-      dontUnpack = true;
-      doCheck = true;
-      checkPhase = ''
-        #!/usr/bin/env bash
+      name = "test-${lib.strings.sanitizeDerivationName name}";
+      passAsFile = [ "expectedJson" "resultJson" ];
+      expectedJson = builtins.toJSON expected;
+      resultJson = builtins.toJSON result;
+
+      builder = pkgs.writeShellScript "builder.sh" ''
+        source $stdenv/setup
+        # Create output directory
+        mkdir -p $out
         echo "Testing ${name}..."
-        expected='${builtins.toJSON expected}'
-        result='${builtins.toJSON result}'
-        if [ "$result" = "$expected" ]; then
-          echo "PASS: ${name}"
+        # Compare the JSON files
+        if diff -u "$expectedJsonPath" "$resultJsonPath" > $out/diff; then
+          echo "PASS: ${name}" | tee $out/result
           exit 0
         else
-          echo "FAIL: ${name}"
-          echo "Expected: $expected"
-          echo "Got: $result"
+          echo "FAIL: ${name}" | tee $out/result
+          echo "Expected:" | tee -a $out/result
+          cat "$expectedJsonPath" | tee -a $out/result
+          echo "Got:" | tee -a $out/result
+          cat "$resultJsonPath" | tee -a $out/result
           exit 1
         fi
       '';
 
-      buildPhase = ''
-        touch $out
-      '';
+      dontUnpack = true;
+      nativeBuildInputs = [ pkgs.diffutils ];
     };
 
   testCases = {
@@ -45,6 +50,19 @@ let
         "pkg/lib/utils.go"
       ];
 
+    testUTFChars = runTest "globs files with an utf8 char match constraint"
+      (normalizeFileset (globset.globs testRoot [ "gø.*" "**/*.gø" ])) [
+        "foo*.gø"
+        "foo.gø"
+        "gø.foo"
+      ];
+    
+    testUTFCharsWithNegation = runTest "globs files with an utf8 char match constraint with negation"
+      (normalizeFileset (globset.globs testRoot [ "gø.*" "**/*.gø" "!*.foo" ])) [
+        "foo*.gø"
+        "foo.gø"
+      ];
+  
     testCProject = runTest "globs all C files that aren't tests"
       (normalizeFileset
         (globset.globs testRoot [ "**/*.c" "**/*.h" "!**/test_*.c" ])) [
@@ -90,6 +108,11 @@ let
       result = normalizeFileset testFileset;
     in runTest "escaping" result [ "src/foo*.c" ];
 
+    testEscapingWithUTF8 = let
+      testFileset = globset.globs testRoot [ "foo\\*.gø" ];
+      result = normalizeFileset testFileset;
+    in runTest "escaping with utf-8" result [ "foo*.gø" ];
+
     testGlobsOrdering = runTest "globs ordering" (normalizeFileset
       (globset.globs testRoot [ "**/*.c" "!**/test_*.c" "src/test/**/*.c" ])) [
         "src/foo*.c"
@@ -134,10 +157,20 @@ let
         "src/foobar.c"
         "src/lib.c"
       ];
+    
+    testCharClassWithUTF8 = runTest "character class matching w/ utf-8"
+      (normalizeFileset (globset.glob testRoot "*.g[ø¬˚]")) [
+        "foo*.gø"
+        "foo.gø"
+      ];
 
     testCharClassWithEscaping = runTest "character class matching w/ escaping"
       (normalizeFileset (globset.glob testRoot "src/[e-g]oo\\*.c"))
       [ "src/foo*.c" ];
+    
+    testCharClassWithEscapingAndUTF8 = runTest "character class matching w/ escaping and utf8"
+      (normalizeFileset (globset.glob testRoot "[e-g]oo\\*.[f-h][ø¬˚]"))
+      [ "foo*.gø" ];
 
     testCharClassWithEscaping2 = runTest "character class matching w/ escaping 2"
       (normalizeFileset (globset.glob testRoot "src/[e-g]oo\\-.[oc]"))
@@ -151,6 +184,12 @@ let
         "src/foo[.o"
         "src/foo].o"
       ];
+    
+    testCharClassWithEscapingInsideClassAndUTF8 =
+      runTest "character class matching w/ escaping inside class and utf8"
+      (normalizeFileset (globset.glob testRoot "[e-g]oo[\\*].gø")) [
+        "foo*.gø"
+      ];
 
     testMultipleCharClassWithEscaping =
       runTest "multiple character class matching w/ escaping"
@@ -160,6 +199,10 @@ let
     testCharRange = runTest "character range matching"
       (normalizeFileset (globset.glob testRoot "**/[a-m]*.py"))
       [ "scripts/main.py" ];
+    
+    testCharRangeWithUTF8 = runTest "character range matching with utf8"
+      (normalizeFileset (globset.glob testRoot "**/*.g[ø-ÿ]"))
+      [ "foo*.gø" "foo.gø" ];
 
     testNegatedClass = runTest "negated character class"
       (normalizeFileset (globset.glob testRoot "src/[^t]*.c")) [
@@ -167,6 +210,16 @@ let
         "src/foobar.c"
         "src/lib.c"
         "src/main.c"
+      ];
+    
+    testNegatedClassWithUTF8 = runTest "negated character class w/ utf8"
+      (normalizeFileset (globset.glob testRoot "g[^˜∂∆].foo")) [
+        "gø.foo"
+      ];
+    
+    testAlternateNegatedClassWithUTF8 = runTest "negated character class w/ utf8"
+      (normalizeFileset (globset.glob testRoot "g[!˜∂∆].foo")) [
+        "gø.foo"
       ];
 
     testNegatedClassMultiple = runTest "negated character class multiple"
@@ -208,7 +261,7 @@ let
     testEmptyCharClass = runTest "empty char class"
       (normalizeFileset (globset.glob testRoot "src/[]*.c"))
       [ ];
-    
+
     testBasicBrace = runTest "simple brace expansion"
       (normalizeFileset (globset.glob testRoot "src/*.{c,h,x}")) [
         "src/bar1.x"
@@ -221,6 +274,13 @@ let
         "src/lib.h"
         "src/main.c"
       ];
+    
+    testBasicBraceWithUTF8 = runTest "simple brace expansion w/ utf8"
+      (normalizeFileset (globset.glob testRoot "g{o,ø}.*")) [
+        "go.mod"
+        "go.sum"
+        "gø.foo"
+      ];
 
     testEmptyBrace = runTest "empty alternatives in brace"
       (normalizeFileset (globset.glob testRoot "src/{,test/}*.c")) [
@@ -230,12 +290,24 @@ let
         "src/main.c"
         "src/test/test_main.c"
       ];
+    
+    testEmptyBraceWithUTF8 = runTest "empty alternatives in brace w/ utf-8"
+      (normalizeFileset (globset.glob testRoot "foo{,\\*}.gø")) [
+        "foo*.gø"
+        "foo.gø"
+      ];
 
     testMultipleBraces = runTest "multiple brace expressions" (normalizeFileset
       (globset.glob testRoot "{src,scripts}/{main,utils}.{c,py}")) [
         "scripts/main.py"
         "scripts/utils.py"
         "src/main.c"
+      ];
+    
+    testMultipleBracesWithUTF8 = runTest "multiple brace expressions w/ utf-8" (normalizeFileset
+      (globset.glob testRoot "{foo,foo*}.{go,gø}")) [
+        "foo*.gø"
+        "foo.gø"
       ];
 
     testBracesWithEscapedAsterisk = runTest "Braces with escaped asterisk"
@@ -281,6 +353,12 @@ let
           "src/bar2.x"
           "src/foo1.x"
           "src/foo2.x"
+        ];
+    
+    testBracesWithRangeInsideAndUTF8 = runTest "Braces with range inside w/ utf8"
+      (normalizeFileset
+        (globset.globs testRoot [ "foo.{g[ø-ÿ]}" ])) [
+          "foo.gø"
         ];
 
     testBracesWithEmptyResult = runTest "Braces with empty result"
@@ -364,7 +442,7 @@ let
       ])) [
         "pkg/lib/utils.go"
       ];
-    
+
     testComplexPattern5 = runTest "complex pattern combining multiple features 5"
       (normalizeFileset (globset.globs testRoot [
         "**/*.{[c-x],go,nix}"
@@ -374,10 +452,7 @@ let
       ];
   };
 
-in pkgs.runCommand "run-all-tests" {
-  nativeBuildInputs = [ pkgs.bash ];
-  buildInputs = builtins.attrValues testCases;
-} ''
-  mkdir -p $out
-  echo "All tests passed!" > $out/result
-''
+  runAllTests = pkgs.linkFarm "run-all-tests"
+    (map (drv: { name = drv.name; path = drv; }) (builtins.attrValues testCases));
+
+in runAllTests

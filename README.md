@@ -81,6 +81,10 @@ Special Terms | Meaning
 ------------- | -------
 `*`           | matches any sequence of non-path-separators
 `/**/`        | matches zero or more directories
+`[^abc]`      | excludes files matching a/b/c at the appropriate location
+`[!abc]`      | identical to `[^abc]`
+`[^a-z]`      | excludes files matching any character between a to z at the appropriate location
+`[!a-z]`      | identical to `[^a-z]`
 
 Any character with a special meaning can be escaped with a backslash (`\`).
 

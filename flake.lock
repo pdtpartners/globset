@@ -17,7 +17,23 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs-lib": "nixpkgs-lib"
+        "nixpkgs-lib": "nixpkgs-lib",
+        "utf8": "utf8"
+      }
+    },
+    "utf8": {
+      "locked": {
+        "lastModified": 1771960330,
+        "narHash": "sha256-cuMzkLOAcw9Vt9KLVv/3MdLeuwvHK2uborUKiJgXr/U=",
+        "owner": "figsoda",
+        "repo": "utf8",
+        "rev": "4ef55eff198b6b21cd1e5df5dc6b802ec16185f1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "figsoda",
+        "repo": "utf8",
+        "type": "github"
       }
     }
   },
